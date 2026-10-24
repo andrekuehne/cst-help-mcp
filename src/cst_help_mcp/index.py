@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from cst_help_mcp.locator import locator_for
 from cst_help_mcp.model import Document, NavNode, NavTree
 
 _SCHEMA = """
@@ -53,6 +54,13 @@ CREATE TABLE IF NOT EXISTS section_areas (
 );
 CREATE INDEX IF NOT EXISTS section_areas_area ON section_areas (area, section);
 CREATE INDEX IF NOT EXISTS sections_document ON sections (document);
+-- The Locator each source path maps to, its Document's own or an Alias's, and the Document's.
+CREATE TABLE IF NOT EXISTS document_locators (
+    release TEXT NOT NULL,
+    locator TEXT NOT NULL,
+    document TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS document_locators_locator ON document_locators (locator);
 CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5 (title, headings, body, tokenize = 'unicode61');
 -- What a Document's Sections share, indexed once per Document: BM25 normalises by the length
 -- of a row, so a long keyword list in every Section's row would count against each of them.
@@ -122,6 +130,10 @@ def _insert(con: sqlite3.Connection, collection: str, doc: Document) -> None:
         "INSERT INTO documents_fts (keywords, toc_paths) VALUES (?, ?)",
         ("\n".join(doc.keywords), "\n".join(doc.toc_paths)),
     ).lastrowid
+    con.executemany(
+        "INSERT INTO document_locators VALUES (?, ?, ?)",
+        [(doc.release, locator_for(path), doc.locator) for path in (doc.source_path, *doc.aliases)],
+    )
     for section in doc.sections:
         locator = f"{doc.locator}#{section.anchor}" if section.anchor else doc.locator
         headings = " ".join(b.plain_text() for b in section.blocks if b.kind == "heading")

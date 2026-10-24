@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+BENCHMARK = Path(__file__).resolve().parent.parent / "docs" / "benchmark.toml"
 SOLVER_HF = "vba_3d/special_vbasolver/special_vbasolver_solver_object.htm.md"
 VBA_3D = "Online Help/mergedProjects/VBA_3D"
 VBA_OVERVIEW = "Online Help/vba"

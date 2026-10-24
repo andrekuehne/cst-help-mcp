@@ -8,6 +8,8 @@ Every expected source was found by hand in `.ingestion/2024/`. Each path, anchor
 
 ## Scoring
 
+`docs/benchmark.toml` holds these questions in the form `cst-help benchmark` scores, with short queries and a tuning/held-out split. This file keeps the reasoning; change a question's sources, Area or text in both.
+
 - Run each question through `cst_help_search`, once without a filter and once with the listed Area filter, if there is one.
 - **Hit at 5:** at least one expected source is among the top 5 Sections returned. A Section counts when it belongs to the expected Document, or to an Alias of it. For a PDF, the Section's page range must include the given page.
 - **Rank:** record the rank (1 to 5) of the best-ranked expected source, or "miss". Report the hit-at-5 rate and the mean reciprocal rank, per category and overall.

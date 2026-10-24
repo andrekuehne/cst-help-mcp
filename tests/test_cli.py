@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
 from typing import Any
 
 import pytest
-from kb_helpers import SOLVER_HF, write_config
+from kb_helpers import BENCHMARK, SOLVER_HF, write_config
 
 from cst_help_mcp.cli import main
+from cst_help_mcp.retrieval import KnowledgeBase
 
 
 def test_lookup_prints_signature_description_and_locator(
@@ -181,3 +183,71 @@ def test_browsing_an_unknown_entry_fails_clearly(vba_kb: Path, capsys: pytest.Ca
 
     assert code == 2
     assert "No entry 'No Such Book' at the top level" in capsys.readouterr().err
+
+
+def test_benchmark_command_scores_the_benchmark_and_the_derived_sets(
+    release_kb: KnowledgeBase, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = ["benchmark", "--kb", str(release_kb.path), "--questions", str(BENCHMARK), "--derived", "20"]
+
+    code = main(args)
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "## questions" in out and "## short" in out and "## toc" in out
+    assert "Skipped, Areas not built: API-04 (vba-schematic)" in out
+    assert "Scored by hand, not here: NODOC-01" in out
+
+
+def test_benchmark_command_takes_weight_overrides_and_searches_a_grid(
+    release_kb: KnowledgeBase, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = ["benchmark", "--kb", str(release_kb.path), "--questions", str(BENCHMARK), "--derived", "0"]
+
+    code = main([*args, "--weight", "title=12", "--fusion", "rank", "--grid", "body=0.5,1"])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "title 12, headings 3, body 0.5, keywords 0.5, toc_paths 0.25; fusion rank" in out
+    assert "best: " in out
+    assert main([*args, "--weight", "colour=1"]) == 2
+    assert "Unknown weight 'colour'" in capsys.readouterr().err
+
+
+def test_logged_queries_become_draft_benchmark_entries(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = tmp_path / "queries.jsonl"
+    records = [
+        {
+            "tool": "cst_help_search",
+            "query": "AR filter macro",
+            "areas": ["vba-3d"],
+            "locators": ["a.md#x", "b.md"],
+        },
+        {"tool": "cst_help_search", "query": "AR filter macro", "areas": ["vba-3d"], "locators": ["a.md#x"]},
+        {
+            "tool": "cst_help_lookup",
+            "name": "Solver.UseArfilter",
+            "area": None,
+            "locators": ["c.md#usearfilter"],
+        },
+        # Already a question of the benchmark.
+        {"tool": "cst_help_search", "query": "disable history step", "areas": None, "locators": []},
+    ]
+    log.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+
+    code = main(["benchmark-drafts", str(log), "--questions", str(BENCHMARK)])
+
+    out = capsys.readouterr().out
+    drafts = tomllib.loads(out)["questions"]
+    assert code == 0
+    assert [(d["id"], d["question"], d["areas"]) for d in drafts] == [
+        ("LOG-01", "AR filter macro", ["vba-3d"]),
+        ("LOG-02", "Solver.UseArfilter", []),
+    ]
+    assert drafts[1]["api_entries"] == ["Solver.UseArfilter"]
+    # Logged queries are held out, and a human gives their expected sources.
+    assert {d["half"] for d in drafts} == {"held-out"}
+    assert all(d["sources"] == [] for d in drafts)
+    assert "# returned: a.md#x, b.md" in out

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Annotated
 
 from mcp.server import MCPServer
@@ -12,6 +13,7 @@ from pydantic import Field
 
 from cst_help_mcp.errors import CstHelpError
 from cst_help_mcp.model import NavTree
+from cst_help_mcp.querylog import QueryLog
 from cst_help_mcp.retrieval import MAX_HITS, BrowseEntry, KnowledgeBase, SearchKind
 
 # Budgets are counted in characters at a pessimistic three characters per token.
@@ -56,8 +58,10 @@ def _incompleteness(kb: KnowledgeBase) -> str:
     )
 
 
-def create_server(kb: KnowledgeBase) -> MCPServer:
+def create_server(kb: KnowledgeBase, query_log: Path | None = None) -> MCPServer:
+    """The server for one Release; with a query log, it records each search and lookup there."""
     server = MCPServer("cst-help", instructions=server_instructions(kb))
+    log = QueryLog(query_log, kb.release) if query_log else None
 
     @server.tool(name="cst_help_lookup", structured_output=False)
     async def lookup(
@@ -67,6 +71,8 @@ def create_server(kb: KnowledgeBase) -> MCPServer:
         """Look up documented API Entries by exact name; case is ignored."""
         with _reported_as_tool_errors():
             hits = kb.lookup(name, area=area)
+        if log:
+            log.record("cst_help_lookup", {"name": name, "area": area}, [h.locator for h in hits])
         if not hits:
             return f"{name}: not documented in Release {kb.release}."
         return _within_budget(
@@ -96,6 +102,9 @@ def create_server(kb: KnowledgeBase) -> MCPServer:
         """
         with _reported_as_tool_errors():
             hits = kb.search(query, areas=areas, kind=kind, limit=limit)
+        if log:
+            arguments = {"query": query, "areas": areas, "kind": kind, "limit": limit}
+            log.record("cst_help_search", arguments, [h.locator for h in hits])
         if not hits:
             return f"No hits for '{query}' in Release {kb.release}."
         return _within_budget(

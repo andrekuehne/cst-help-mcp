@@ -1,0 +1,548 @@
+# The retrieval benchmark for the CST Studio Suite 2024 Knowledge Base, in the form the runner scores
+# (`cst-help benchmark`). docs/benchmark-draft.md explains each question: why its sources answer it,
+# its risks and how it is scored. This file holds no vendor text: questions and short queries are our
+# own words, and sources are source paths, anchors, headings and PDF pages.
+#
+# - `half` splits the questions once into a tuning and a held-out half, stratified by category with a
+#   fixed seed. A weight change counts as better only if the held-out half improves too. A new
+#   question without one falls into a half by a hash of its id; one from the query log is held out.
+# - `areas` is the filter an agent would plausibly use; [] for none.
+# - `sources` are listed best first, with paths relative to the corpus root. The runner maps them to
+#   Locators mechanically (ADR 0011), and a PDF page to its `page-<n>` anchor.
+# - `short` are queries as an agent types them. They are scored next to the full question.
+# - `api_entries`: for API questions, lookup of the first must return the first source.
+# - `scored = "by hand"` lists a question without scoring it.
+# - `baseline` records ranks among the top 5 hits, unfiltered and filtered to the Areas, "miss" for
+#   none: before ticket 06 ("before-06") and after it ("06"). Search must not fall below the newest.
+# - Ids are never reused. To drop a question, set `confidence = "rejected"`.
+
+[categories]
+API = "Exact API lookup"
+SOL = "Solver-specific"
+HOW = "How-to and UI"
+TERM = "Terminology mismatch"
+THEO = "Theory and equations"
+LINK = "Crosslink to follow"
+FIG = "Figure matters"
+PDF = "PDF manuals"
+EXP = "Example Projects"
+REL = "Release notes"
+LIB = "Library"
+NODOC = "Not in the documentation"
+LOG = "Queries agents sent (cst-help benchmark-drafts)"
+
+# 1. Exact API lookups
+
+[[questions]]
+id = "API-01"
+half = "tuning"
+question = "My macro needs to set the solver frequency range to 1–10 GHz. What's the VBA call?"
+areas = ["vba-3d"]
+short = ["solver frequency range VBA", "Solver.FrequencyRange"]
+api_entries = ["Solver.FrequencyRange"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_solver_object.htm", anchor = "General Methods", headings = ["FrequencyRange"] },
+]
+
+[[questions]]
+id = "API-02"
+half = "tuning"
+question = "Write VBA that creates a waveguide port on the zmin boundary, covering the full cross-section, with 2 modes."
+areas = ["vba-3d"]
+short = ["waveguide port VBA", "create port number of modes"]
+api_entries = ["Port.Create"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbaports/special_vbaports_port_object.htm", anchor = "Port_Creation", headings = ["Create / Modify"] },
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbaports/special_vbaports_port_object.htm", anchor = "Port_Settings", headings = ["Orientation", "NumberOfModes", "Coordinates"] },
+]
+
+[[questions]]
+id = "API-03"
+half = "tuning"
+question = "How do I export the S-parameters as a Touchstone file from a macro, renormalized to 50 Ω?"
+areas = ["vba-3d"]
+short = ["export touchstone VBA", "touchstone renormalize impedance"]
+api_entries = ["TOUCHSTONE.Write"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbaimpexp/special_vbaimp_exp_touchstone.htm", anchor = "Methods", headings = ["Impedance", "Renormalize", "Write"] },
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbaimpexp/special_vbaimp_exp_touchstone.htm", anchor = "Example" },
+]
+
+[[questions]]
+id = "API-04"
+half = "held-out"
+question = "In a schematic (Design Studio) macro, how do I create an S-parameter task that sweeps 0–10 GHz, and then run it?"
+areas = ["vba-schematic"]
+short = ["schematic S-parameter task VBA", "SimulationTask SetSweepData"]
+api_entries = ["SimulationTask.SetSweepData", "SimulationTask.Update"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/VBA_DES/special_vbacommands/simulationtaskobject.htm", anchor = "General_Methods", headings = ["Type", "Name", "Create", "Update"] },
+    { path = "Online Help/mergedProjects/VBA_DES/special_vbacommands/simulationtaskobject.htm", anchor = "Special_Methods", headings = ["SetSweepData"] },
+]
+
+[[questions]]
+id = "API-05"
+half = "held-out"
+question = "From VBA in the schematic, how do I add an inductor block and set its inductance to the parameter Ind1?"
+areas = ["vba-schematic"]
+short = ["schematic inductor block VBA", "Block SetDoubleProperty"]
+api_entries = ["Block.SetDoubleProperty"]
+confidence = "best judgement, verify in CST"
+sources = [
+    { path = "Online Help/mergedProjects/VBA_DES/special_vbacommands/blockobject.htm", anchor = "Properties", headings = ["SetDoubleProperty"] },
+    { path = "Online Help/mergedProjects/VBA_DES/special_vbacommands/blocktypes.htm" },
+    { path = "Online Help/mergedProjects/VBA_DES/special_vbacommands/optimizerobject.htm", anchor = "Example1" },
+]
+
+[[questions]]
+id = "API-06"
+half = "held-out"
+question = "How do I write results line by line into a CSV file from a CST macro?"
+areas = ["winwrap-basic"]
+short = ["write text file macro", "Open For Output Print #"]
+api_entries = ["Open", "Print #"]
+confidence = "high"
+sources = [
+    { path = "Online Help/sax_basic/ww_00178.htm" },
+    { path = "Online Help/sax_basic/ww_00185.htm" },
+    { path = "Online Help/sax_basic/ww_00035.htm" },
+]
+
+[[questions]]
+id = "API-07"
+half = "tuning"
+question = "In a macro, how can I loop over every *.s2p file in a folder?"
+areas = ["winwrap-basic"]
+short = ["Dir$ loop files", "list files in folder macro"]
+api_entries = ["Dir$"]
+confidence = "high"
+sources = [
+    { path = "Online Help/sax_basic/ww_00069.htm" },
+]
+
+[[questions]]
+id = "API-08"
+half = "held-out"
+question = "With cst.results, how do I get S1,1 for every run of a parameter sweep, together with the parameter values of each run?"
+areas = ["python"]
+short = ["cst.results run ids parameter values", "get_parameter_combination"]
+api_entries = ["cst.results.ResultModule.get_run_ids"]
+confidence = "high"
+sources = [
+    { path = "Online Help/Python/source/cst.results.html", anchor = "cst.results.ResultModule.get_run_ids" },
+    { path = "Online Help/Python/source/cst.results.html", anchor = "cst.results.ResultModule.get_result_item" },
+    { path = "Online Help/Python/source/cst.results.html", anchor = "cst.results.ResultModule.get_parameter_combination" },
+]
+
+[[questions]]
+id = "API-09"
+half = "held-out"
+question = "Can cst.results read a project that is open in CST right now, for example one my Control Server is driving?"
+areas = ["python"]
+short = ["cst.results allow_interactive", "read open project results python"]
+api_entries = ["cst.results.ProjectFile.init"]
+confidence = "high"
+sources = [
+    { path = "Online Help/Python/source/cst.results.html", anchor = "cst.results.ProjectFile.init" },
+    { path = "Online Help/Python/source/cst.results.html", anchor = "general-notes" },
+]
+
+[[questions]]
+id = "API-10"
+half = "tuning"
+question = "If I call model3d.add_to_history twice with the same header, does CST keep both history blocks?"
+areas = ["python"]
+short = ["add_to_history same caption", "AddToHistory replace block"]
+api_entries = ["AddToHistory", "cst.interface.Model3D.add_to_history"]
+confidence = "verify in CST"
+sources = [
+    { path = "Online Help/mergedProjects/VBA_3D/common_vbaapp/common_vbaappapplication_object.htm", anchor = "General Methods", headings = ["AddToHistory"] },
+    { path = "Online Help/Python/source/cst.interface.html", anchor = "cst.interface.Model3D.add_to_history" },
+]
+
+# 2. Solver-specific
+
+[[questions]]
+id = "SOL-01"
+half = "held-out"
+question = "What does the time domain solver's Accuracy of −40 dB actually control, and how do I set it to −50 dB in VBA?"
+areas = ["3d"]
+short = ["time domain solver accuracy", "steady state energy criterion"]
+api_entries = ["Solver.SteadyStateLimit"]
+confidence = "high"
+baseline = { before-06 = [2, "miss"], 06 = [2, "miss"] }
+sources = [
+    { path = "Online Help/mergedProjects/3D/special_solvopt/special_solvopt_solver.htm" },
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_solver_object.htm", anchor = "TD Steady State", headings = ["SteadyStateLimit"] },
+]
+
+[[questions]]
+id = "SOL-02"
+half = "tuning"
+question = "How do I run the integral equation solver from a macro? Is there an IESolver.Start, or does it go through FDSolver?"
+areas = ["vba-3d"]
+short = ["integral equation solver VBA", "FDSolver SetMethod surface"]
+api_entries = ["FDSolver.SetMethod"]
+confidence = "verify in CST"
+baseline = { before-06 = [1, 1], 06 = [1, 1] }
+sources = [
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_fdsolver_object.htm", anchor = "FD Method", headings = ["SetMethod"] },
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_iesolver_object.htm", anchor = "IE_General" },
+    { path = "Online Help/mergedProjects/VBA_3D/common_vbaapp/common_vbaappapplication_object.htm", anchor = "General Methods", headings = ["ChangeSolverType"] },
+]
+
+[[questions]]
+id = "SOL-03"
+half = "held-out"
+question = "Can the eigenmode solver handle open boundaries and lossy, dispersive materials, or only closed, lossless cavities?"
+areas = ["3d"]
+short = ["eigenmode solver lossy open boundary", "eigenmode general lossy method"]
+confidence = "high"
+baseline = { before-06 = [4, 3], 06 = [3, 2] }
+sources = [
+    { path = "Online Help/mergedProjects/3D/special_overview/special_overview_eigenmodesolverover.htm" },
+]
+
+[[questions]]
+id = "SOL-04"
+half = "tuning"
+question = "My high-Q filter takes forever in the time domain solver. How do I switch on the AR filter from VBA?"
+areas = ["vba-3d"]
+short = ["AR filter VBA", "UseArfilter"]
+api_entries = ["Solver.UseArfilter"]
+confidence = "high"
+baseline = { before-06 = [1, 1], 06 = [3, 1] }
+sources = [
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_solver_object.htm", anchor = "TD AR-Filter", headings = ["UseArfilter"] },
+    { path = "Online Help/mergedProjects/3D/special_overview/special_overview_arfilterover.htm", anchor = "Online_AR_Filter" },
+    { path = "Online Help/mergedProjects/3D/common_overview/common_overview_problems_transient_solver.htm", anchor = "TD_MaxSimulationTimeWarning" },
+]
+
+# 3. How-to and UI
+
+[[questions]]
+id = "HOW-01"
+half = "tuning"
+question = "In the discrete port dialog, what's the difference between the S-parameter, voltage and current port types, and what does the impedance field do?"
+areas = ["3d"]
+short = ["discrete port impedance", "discrete port type voltage current"]
+confidence = "high"
+baseline = { before-06 = [1, 1], 06 = [1, 1] }
+sources = [
+    { path = "Online Help/mergedProjects/3D/special_solvopt/special_solvopt_discreteports.htm" },
+    { path = "Online Help/mergedProjects/3D/special_overview/special_overview_discrete_port_overview.htm" },
+]
+
+[[questions]]
+id = "HOW-02"
+half = "held-out"
+question = "For an antenna model, which boundary setting adds free space for the farfield, and how does it combine with the extra space in the background settings?"
+areas = ["3d"]
+short = ["open add space boundary", "background distance boundary antenna"]
+confidence = "high"
+baseline = { before-06 = [5, 5], 06 = [4, 4] }
+sources = [
+    { path = "Online Help/mergedProjects/3D/special_solvopt/special_solvopt_boundary_conditions_boundaries.htm" },
+    { path = "Online Help/mergedProjects/3D/common_general/common_general_background.htm" },
+]
+
+[[questions]]
+id = "HOW-03"
+half = "held-out"
+question = "If I put two parameters into one sequence of the Parameter Sweep dialog, do I get every combination? How do I sweep them one after the other instead?"
+areas = ["3d"]
+short = ["parameter sweep sequence", "parameter sweep combinations"]
+confidence = "high"
+baseline = { before-06 = [1, 1], 06 = [1, 1] }
+sources = [
+    { path = "Online Help/mergedProjects/3D/special_process/special_solvopt_parametersweep.htm" },
+    { path = "Online Help/mergedProjects/3D/special_process/special_solvopt_parametersweeppar.htm" },
+]
+
+[[questions]]
+id = "HOW-04"
+half = "tuning"
+question = "How do I temporarily switch off a step in the history list without deleting it?"
+areas = ["3d"]
+short = ["disable history step", "history list hide"]
+confidence = "high"
+baseline = { before-06 = [3, 3], 06 = [1, 1] }
+sources = [
+    { path = "Online Help/mergedProjects/3D/common_macro/common_macro_history_list.htm" },
+]
+
+# 4. Terminology mismatch
+
+[[questions]]
+id = "TERM-01"
+half = "held-out"
+question = "How do I make the T-solver the active solver from a macro before I start it?"
+areas = ["vba-3d"]
+short = ["change solver type VBA", "T-solver macro"]
+api_entries = ["ChangeSolverType", "Solver.Start"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/VBA_3D/common_vbaapp/common_vbaappapplication_object.htm", anchor = "General Methods", headings = ["ChangeSolverType"] },
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_solver_object.htm", anchor = "TD General", headings = ["Start"] },
+]
+
+[[questions]]
+id = "TERM-02"
+half = "tuning"
+question = "The run finished, but there's no radiation pattern for my antenna in the results. What did I forget to set up?"
+areas = ["3d"]
+short = ["radiation pattern missing", "farfield monitor"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/3D/special_solvopt/special_solvopt_monitor.htm" },
+    { path = "Online Help/mergedProjects/3D/special_overview/special_overview_frequency_domain_solver_settings.htm" },
+]
+
+[[questions]]
+id = "TERM-03"
+half = "tuning"
+question = "How do I run a time domain simulation of my circuit in the schematic, for example to get an eye diagram from a bit sequence?"
+areas = ["circuits"]
+short = ["schematic time domain simulation", "eye diagram transient task"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/DES/analysis/simulation/tasks/transientsimulationtask.htm" },
+    { path = "Online Help/mergedProjects/DES/analysis/simulation/tasks/transient_simulation_task_settings.htm" },
+]
+
+# 5. Theory and equations
+
+[[questions]]
+id = "THEO-01"
+half = "held-out"
+question = "What formulas does CST use for dielectric and wall (surface) losses when it computes the Q factor?"
+areas = ["3d"]
+short = ["Q factor loss calculation", "surface loss formula"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/3D/special_overview/special_overview_loss_and_q_calculation_overview.htm" },
+    { path = "Online Help/mergedProjects/3D/special_overview/special_overview_eigenmodesolverover.htm" },
+]
+
+[[questions]]
+id = "THEO-02"
+half = "tuning"
+question = "How does CST define azimuth and elevation in the Ludwig 2 coordinate systems (AE vs EA)? Which axis is the pole?"
+areas = ["3d"]
+short = ["Ludwig 2 azimuth elevation", "farfield coordinate system"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/3D/special_postpr/special_postpr_pp_farfield.htm", anchor = "Transverse_Components_in_Different_Coordinate_Systems" },
+    { path = "Online Help/mergedProjects/3D/special_postpr/special_postpr_farfield_plot_special_settings_axes.htm" },
+]
+
+# 6. Crosslink to follow
+
+[[questions]]
+id = "LINK-01"
+half = "held-out"
+question = "How do I format a Double with exactly three decimal places in a CST macro?"
+areas = ["winwrap-basic"]
+short = ["Format$ decimal places", "number format codes"]
+api_entries = ["Format$"]
+confidence = "high"
+sources = [
+    { path = "Online Help/sax_basic/ww_00109.htm" },
+    { path = "Online Help/sax_basic/ww_00105.htm" },
+]
+
+[[questions]]
+id = "LINK-02"
+half = "tuning"
+question = "cst.results list_subprojects() returns Tasks\\SP1. What is that schematic task, and why does get_tree_items() not show its results?"
+areas = ["python"]
+short = ["cst.results subproject", "load_subproject"]
+api_entries = ["cst.results.ProjectFile.load_subproject"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/DES/analysis/simulation/simulation_task_overview.htm", anchor = "Simulation_Project" },
+    { path = "Online Help/Python/source/cst.results.html", anchor = "cst.results.ProjectFile.list_subprojects" },
+]
+
+# 7. Figure or screenshot matters
+
+[[questions]]
+id = "FIG-01"
+half = "held-out"
+question = "How big should the waveguide port be around a microstrip line? What exactly does the extension factor k multiply?"
+areas = ["3d"]
+short = ["microstrip waveguide port size", "port extension factor"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/3D/special_overview/special_overview_waveguideover.htm", anchor = "Port_Modes_Microstrips" },
+    { path = "Online Help/mergedProjects/3D/special_overview/special_overview_waveguideover.htm", anchor = "Port_Definition___Construction_Microstrips" },
+]
+
+[[questions]]
+id = "FIG-02"
+half = "tuning"
+question = "Which high-frequency solver does CST recommend as my structure becomes electrically larger, or more strongly resonant?"
+areas = ["3d"]
+short = ["which solver", "solver choice electrically large"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/3D/special_overview/special_overview_whichsolver.htm", anchor = "CST_MICROWAVE_STUDIO_" },
+]
+
+[[questions]]
+id = "FIG-03"
+half = "held-out"
+question = "How exactly does CST define the power quantities (stimulated, accepted, radiated power) that the schematic uses when it combines farfield results?"
+areas = ["circuits"]
+short = ["power definitions combine results", "accepted power definition"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/DES/theory/power_definitions_for_combine_results.htm" },
+]
+
+# 8. PDF manuals
+
+[[questions]]
+id = "PDF-01"
+half = "tuning"
+question = "Discrete edge port, discrete face port or waveguide port: which gives the most accurate S-parameters for a microstrip filter, and when is a discrete port good enough?"
+areas = ["manuals"]
+short = ["choosing port type", "discrete face port vs waveguide port"]
+confidence = "high"
+sources = [
+    { path = "Documentation/CST Studio Suite - High Frequency Simulation.pdf", page = 102 },
+    { path = "Online Help/mergedProjects/3D/special_overview/special_overview_waveguideover.htm" },
+]
+
+[[questions]]
+id = "PDF-02"
+half = "held-out"
+question = "What's the command line for a silent, unattended install of CST Studio Suite?"
+areas = ["manuals"]
+short = ["silent installation", "unattended install command line"]
+confidence = "high"
+sources = [
+    { path = "Documentation/CST Studio Suite - Getting Started.pdf", page = 12 },
+    { path = "Online Help/advanced/central_shared_installation.htm" },
+]
+
+# 9. Example Projects
+
+[[questions]]
+id = "EXP-01"
+half = "held-out"
+question = "Is there a ready-made example of a SAR simulation of a mobile phone next to a head and a hand?"
+areas = ["example-projects"]
+short = ["SAR head hand example", "mobile phone SAR"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/EXP_HF/examplesoverview/sar_head_hand_-_mobile_phone_calculation.htm" },
+]
+
+[[questions]]
+id = "EXP-02"
+half = "tuning"
+question = "Is there a step-by-step tutorial for setting up a PMSM load / no-load drive scenario with the electrical machine task?"
+areas = ["example-projects"]
+short = ["PMSM tutorial", "electrical machine task no-load"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/EXP_LF/examplesoverview/tutorials/electrical_machine_task.htm", anchor = "Configure_the_Permanent_Magnet_Synchronous_Machine_Load___Noload_Drive_Scenario" },
+    { path = "Online Help/mergedProjects/EXP_LF/examplesoverview/tutorials/electrical_machine_coupled_drive_scenarios.htm" },
+    { path = "Online Help/mergedProjects/DES/analysis/simulation/tasks/machinetask/pmsm_noload_load.htm" },
+]
+
+# 10. Release notes
+
+[[questions]]
+id = "REL-01"
+half = "tuning"
+question = "What's new for Python automation in CST 2024? Can Python call VBA functions directly now?"
+areas = ["manuals"]
+short = ["what's new python 2024", "release notes python automation"]
+confidence = "high"
+sources = [
+    { path = "Documentation/CST Studio Suite - Release Notes.pdf", page = 10 },
+]
+
+# 11. Library: procedure names stand in for anchors.
+
+[[questions]]
+id = "LIB-01"
+half = "held-out"
+question = "I want a result template that exports a 3D field result, for example the E-field at one frequency, to an ASCII file after every run. Is there a CST template I can build on?"
+areas = ["result-templates"]
+short = ["export 3D field result template", "result template ASCII export"]
+confidence = "high"
+sources = [
+    { path = "Library/Result Templates/2D and 3D Field Results/- Export 3D Field Result.rtp", headings = ["Define", "Evaluate0D"] },
+    { path = "Online Help/mergedProjects/3D/common_macro/post_processing_template_layout.htm" },
+]
+
+[[questions]]
+id = "LIB-02"
+half = "held-out"
+question = "How do I export my antenna's farfields as a farfield source, to use as the excitation in another project, ideally automatically after every run?"
+areas = ["result-templates"]
+short = ["export farfield source template", "farfield source result template"]
+confidence = "high"
+sources = [
+    { path = "Library/Result Templates/Farfield and Antenna Properties/Export Farfields As Source^+MWS+DS.rtp", headings = ["Define", "Evaluate0D"] },
+]
+
+[[questions]]
+id = "LIB-03"
+half = "tuning"
+question = "How can I write the S-parameters to a Touchstone file automatically after every step of a parameter sweep?"
+areas = ["result-templates"]
+short = ["touchstone export template", "touchstone after every run"]
+confidence = "high"
+sources = [
+    { path = "Library/Result Templates/S-Parameters/- Touchstone Export^+MWS+DS.rtp", headings = ["Define", "Evaluate1D"] },
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbaimpexp/special_vbaimp_exp_touchstone.htm", anchor = "Methods", headings = ["Write"] },
+]
+
+[[questions]]
+id = "LIB-04"
+half = "held-out"
+question = "Build the settings dialog of my template the way CST's own templates do. How do they define the dialog, react to its events and open it from Define?"
+areas = ["result-templates", "winwrap-basic"]
+short = ["Begin Dialog template", "dialog function result template"]
+confidence = "best judgement"
+sources = [
+    { path = "Library/Result Templates/S-Parameters/- Touchstone Export^+MWS+DS.rtp", headings = ["Define"] },
+    { path = "Library/Result Templates/2D and 3D Field Results/- Export 3D Field Result.rtp", headings = ["Define"] },
+    { path = "Online Help/sax_basic/ww_00013.htm" },
+]
+
+[[questions]]
+id = "LIB-05"
+half = "tuning"
+question = "How does a CST result template remember the user's settings between runs and after the project is reopened?"
+areas = ["vba-3d", "result-templates"]
+short = ["StoreScriptSetting GetScriptSetting", "template remember settings"]
+api_entries = ["StoreScriptSetting", "GetScriptSetting", "StoreTemplateSetting"]
+confidence = "high"
+sources = [
+    { path = "Online Help/mergedProjects/VBA_3D/common_vbaapp/common_vbaappapplication_object.htm", headings = ["StoreScriptSetting", "GetScriptSetting", "StoreTemplateSetting"] },
+    { path = "Library/Result Templates/S-Parameters/- Touchstone Export^+MWS+DS.rtp", headings = ["Define"] },
+]
+
+# 12. Not in the documentation: scored by hand during the agent check.
+
+[[questions]]
+id = "NODOC-01"
+half = "tuning"
+question = "Write a macro that switches the project to the TLM solver and sets up a hexahedral TLM mesh."
+areas = ["vba-3d"]
+short = ["TLM solver VBA", "hexahedral TLM mesh macro"]
+confidence = "high"
+scored = "by hand"
+sources = [
+    { path = "Online Help/mergedProjects/3D/special_mesh/special_mesh_mesh_props_hex_new.htm" },
+    { path = "Online Help/mergedProjects/VBA_3D/special_vbamesh/special_vbamesho.htm" },
+]

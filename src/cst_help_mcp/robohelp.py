@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup, Tag
 from bs4.element import CData, NavigableString, PageElement
 
 from cst_help_mcp.links import normalise_href
-from cst_help_mcp.locator import anchor_for
+from cst_help_mcp.locator import anchor_for, is_usable_source_id
 from cst_help_mcp.model import SEPARATOR, ApiEntry, Block, Document, Link, Section, link_span, plain
 from cst_help_mcp.navigation import decode_js_string
 
@@ -96,8 +96,6 @@ _BLOCK_TAGS = frozenset(
     ]
 )
 _NOTE = re.compile(r"(?:please\s+)?note\s*:\s*", re.IGNORECASE)
-# Source ids are kept as anchors only when they are usable as link fragments.
-_SOURCE_ID = re.compile(r"[A-Za-z][A-Za-z0-9_.:-]*")
 _TOC_INFO = re.compile(r'addTocInfo\s*\(\s*"((?:\\.|[^"\\])*)"\s*\)', re.DOTALL)
 
 
@@ -440,7 +438,7 @@ class _DocumentBuilder:
         # A link's name only serves its popup; the heading's own anchor is a bare <a name>.
         own = element.find("a", attrs={"name": True, "href": False})
         source_id = str(own["name"]) if isinstance(own, Tag) else ""
-        if _SOURCE_ID.fullmatch(source_id) and source_id not in self._used_anchors:
+        if is_usable_source_id(source_id) and source_id not in self._used_anchors:
             self._used_anchors.add(source_id)
             anchor = source_id
         else:

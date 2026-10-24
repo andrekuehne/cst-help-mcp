@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from typing import get_args
 
 import pytest
-from kb_helpers import SOLVER_HF
+from kb_helpers import BENCHMARK, SOLVER_HF
 
-from cst_help_mcp.locator import locator_for
-from cst_help_mcp.retrieval import KnowledgeBase
+from cst_help_mcp.benchmark import Benchmark, Question, Report, load_benchmark, run_benchmark
+from cst_help_mcp.retrieval import Fusion, KnowledgeBase, Ranking
 
 SOLID = "vba_3d/common_vbasolido/common_vbasolido_solid_object.htm.md"
 
@@ -79,128 +79,41 @@ def test_punctuation_in_a_query_never_causes_an_error(kb: KnowledgeBase, query: 
     assert isinstance(kb.search(query), list)
 
 
-@dataclass(frozen=True)
-class Question:
-    """A solver or how-to question of the benchmark (docs/benchmark-draft.md), until ticket 07 makes
-    the whole benchmark machine-readable."""
-
-    id: str
-    text: str
-    area: str
-    sources: tuple[str, ...]  # the expected Documents' source paths
-    # The rank (1 to 5) of the best expected source among the hits, unfiltered and filtered to the
-    # Area, or None for a miss: before ticket 06, and as search must keep it now.
-    before: tuple[int | None, int | None]
-    now: tuple[int | None, int | None]
+# The benchmark questions with recorded ranks: ticket 06's solver and how-to questions.
+TRACKED = [q for q in load_benchmark(BENCHMARK).questions if q.baseline]
 
 
-_3D = "Online Help/mergedProjects/3D"
-_VBA = "Online Help/mergedProjects/VBA_3D"
-QUESTIONS = [
-    Question(
-        "SOL-01",
-        "What does the time domain solver's Accuracy of -40 dB actually control, and how do I set it to "
-        "-50 dB in VBA?",
-        "3d",
-        (
-            f"{_3D}/special_solvopt/special_solvopt_solver.htm",
-            f"{_VBA}/special_vbasolver/special_vbasolver_solver_object.htm",
-        ),
-        before=(2, None),
-        now=(2, None),
-    ),
-    Question(
-        "SOL-02",
-        "How do I run the integral equation solver from a macro? Is there an IESolver.Start, or does it go "
-        "through FDSolver?",
-        "vba-3d",
-        (
-            f"{_VBA}/special_vbasolver/special_vbasolver_fdsolver_object.htm",
-            f"{_VBA}/special_vbasolver/special_vbasolver_iesolver_object.htm",
-            f"{_VBA}/common_vbaapp/common_vbaappapplication_object.htm",
-        ),
-        before=(1, 1),
-        now=(1, 1),
-    ),
-    Question(
-        "SOL-03",
-        "Can the eigenmode solver handle open boundaries and lossy, dispersive materials, or only closed, "
-        "lossless cavities?",
-        "3d",
-        (f"{_3D}/special_overview/special_overview_eigenmodesolverover.htm",),
-        before=(4, 3),
-        now=(3, 2),
-    ),
-    Question(
-        "SOL-04",
-        "My high-Q filter takes forever in the time domain solver. How do I switch on the AR filter from VBA?",
-        "vba-3d",
-        (
-            f"{_VBA}/special_vbasolver/special_vbasolver_solver_object.htm",
-            f"{_3D}/special_overview/special_overview_arfilterover.htm",
-            f"{_3D}/common_overview/common_overview_problems_transient_solver.htm",
-        ),
-        before=(1, 1),
-        now=(3, 1),
-    ),
-    Question(
-        "HOW-01",
-        "In the discrete port dialog, what's the difference between the S-parameter, voltage and current port "
-        "types, and what does the impedance field do?",
-        "3d",
-        (
-            f"{_3D}/special_solvopt/special_solvopt_discreteports.htm",
-            f"{_3D}/special_overview/special_overview_discrete_port_overview.htm",
-        ),
-        before=(1, 1),
-        now=(1, 1),
-    ),
-    Question(
-        "HOW-02",
-        "For an antenna model, which boundary setting adds free space for the farfield, and how does it "
-        "combine with the extra space in the background settings?",
-        "3d",
-        (
-            f"{_3D}/special_solvopt/special_solvopt_boundary_conditions_boundaries.htm",
-            f"{_3D}/common_general/common_general_background.htm",
-        ),
-        before=(5, 5),
-        now=(4, 4),
-    ),
-    Question(
-        "HOW-03",
-        "If I put two parameters into one sequence of the Parameter Sweep dialog, do I get every combination? "
-        "How do I sweep them one after the other instead?",
-        "3d",
-        (
-            f"{_3D}/special_process/special_solvopt_parametersweep.htm",
-            f"{_3D}/special_process/special_solvopt_parametersweeppar.htm",
-        ),
-        before=(1, 1),
-        now=(1, 1),
-    ),
-    Question(
-        "HOW-04",
-        "How do I temporarily switch off a step in the history list without deleting it?",
-        "3d",
-        (f"{_3D}/common_macro/common_macro_history_list.htm",),
-        before=(3, 3),
-        now=(1, 1),
-    ),
-]
+@pytest.fixture(scope="module")
+def tracked_report(release_kb: KnowledgeBase) -> Report:
+    return run_benchmark(release_kb, Benchmark(load_benchmark(BENCHMARK).categories, TRACKED))
 
 
-def _rank(kb: KnowledgeBase, question: Question, areas: list[str] | None) -> int | None:
-    expected = {locator_for(source) for source in question.sources}
-    hits = kb.search(question.text, areas=areas)
-    return next((i for i, h in enumerate(hits[:5], 1) if h.locator.partition("#")[0] in expected), None)
-
-
-@pytest.mark.parametrize("question", QUESTIONS, ids=lambda q: q.id)
-def test_benchmark_questions_keep_their_ranks(release_kb: KnowledgeBase, question: Question) -> None:
-    ranks = (_rank(release_kb, question, None), _rank(release_kb, question, [question.area]))
-
-    worse = [got for got, kept in zip(ranks, question.now, strict=True) if (got or 6) > (kept or 6)]
-    assert not worse, (
-        f"{question.id} ranks {ranks} (unfiltered, {question.area}); now {question.now}, before 06 {question.before}"
+@pytest.mark.parametrize("question", TRACKED, ids=lambda q: q.id)
+def test_benchmark_questions_keep_their_newest_recorded_ranks(
+    tracked_report: Report, question: Question
+) -> None:
+    assert question.baseline
+    newest, kept = list(question.baseline.items())[-1]
+    ranks = (
+        tracked_report.rank(question.id, filtered=False),
+        tracked_report.rank(question.id, filtered=True),
     )
+
+    worse = [got for got, rank in zip(ranks, kept, strict=True) if (got or 6) > (rank or 6)]
+    assert not worse, f"{question.id} ranks {ranks} (all, {', '.join(question.areas)}); {newest} {kept}"
+
+
+def test_field_weights_can_be_overridden_without_editing_code(prose_kb: KnowledgeBase) -> None:
+    without_keywords = Ranking(keywords=0.0, toc_paths=0.0)
+
+    hits = prose_kb.search("advancing front mesher", ranking=without_keywords)
+
+    # Only the author keyword names the topic (test_an_author_keyword_finds_the_topic_it_names).
+    assert not hits or not hits[0].locator.startswith("3d/common_mesh/common_mesh_tetvolume.htm.md")
+
+
+@pytest.mark.parametrize("fusion", get_args(Fusion))
+def test_section_and_document_scores_can_be_put_on_one_scale(prose_kb: KnowledgeBase, fusion: Fusion) -> None:
+    hits = prose_kb.search("advancing front mesher", ranking=Ranking(fusion=fusion))
+
+    assert "3d/common_mesh/common_mesh_tetvolume.htm.md" in [h.locator.partition("#")[0] for h in hits[:5]]

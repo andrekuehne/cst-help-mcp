@@ -16,21 +16,56 @@ from typing import Literal, NamedTuple, Self
 from cst_help_mcp import layout
 from cst_help_mcp.errors import KnowledgeBaseError
 from cst_help_mcp.index import name_key, open_read_only
+from cst_help_mcp.locator import document_part
 from cst_help_mcp.model import CODE_KINDS, SEPARATOR, NavTree
 
 MAX_HITS = 10
 _CANDIDATES = 100  # Sections each index contributes before the tiers are merged
 _SNIPPET_WORDS = 24
-# BM25 weights of the word indexes' fields. A Section's own are title, headings and body; its
-# Document's are author keywords and table-of-contents paths. The Document's score counts for every
-# Section and comes from short rows, so its weights are much lower for the same pull. They were
-# tuned on the benchmark's solver and how-to questions (tests/test_search_ranking.py).
-_SECTION_WEIGHTS = "10.0, 3.0, 1.0"
-_DOCUMENT_WEIGHTS = "0.5, 0.25"
+_RRF_K = 60  # the usual constant of reciprocal rank fusion
 # VBA code calls the Application object's methods without an object; its help page is "Project Object".
 _OBJECT_ALIASES = {"application": "project"}
 
 SearchKind = Literal["prose", "code", "all"]
+# How a Section's own score and its Document's are put on one scale before they are added: raw BM25,
+# each divided by the best score of its index for the query, or reciprocal rank fusion.
+Fusion = Literal["sum", "normalised", "rank"]
+
+
+@dataclass(frozen=True)
+class Ranking:
+    """BM25 weights of the word indexes' fields, and how their two scores combine.
+
+    A Section's own fields are title, headings and body; its Document's are author keywords and
+    table-of-contents paths. The Document's score counts for every Section and comes from short rows,
+    so its weights are much lower for the same pull. They were tuned on the benchmark's solver and
+    how-to questions (docs/benchmark.toml); `cst-help benchmark` tries others.
+    """
+
+    title: float = 10.0
+    headings: float = 3.0
+    body: float = 1.0
+    keywords: float = 0.5
+    toc_paths: float = 0.25
+    fusion: Fusion = "sum"
+
+    def scores(self, index: str, weights: tuple[float, ...]) -> str:
+        """SQL selecting the rowid and score of each row of a word index that matches the parameter;
+        lower is better."""
+        score = {
+            "sum": "raw",
+            "normalised": "-(raw / min(raw) OVER ())",
+            "rank": f"-1.0 / ({_RRF_K} + rank() OVER (ORDER BY raw))",
+        }[self.fusion]
+        bm25 = f"bm25({index}, {', '.join(str(float(w)) for w in weights)})"
+        # bm25() can't be used in a window function, so it is computed first.
+        return (
+            f"SELECT id, {score} AS score"
+            f" FROM (SELECT rowid AS id, {bm25} AS raw FROM {index} WHERE {index} MATCH ?)"
+        )
+
+
+DEFAULT_RANKING = Ranking()
 
 NAV_TREES: dict[NavTree, str] = {"toc": "table of contents", "keywords": "keyword index"}
 
@@ -92,6 +127,13 @@ class BrowseEntry:
     def __str__(self) -> str:
         below = f" ({self.children} entries below)" if self.children else ""
         return f"{self.name}{below}"
+
+
+@dataclass(frozen=True)
+class NavEntry:
+    path: list[str]  # the names from the top level down to the entry
+    locator: str | None
+    children: int
 
 
 @dataclass(frozen=True)
@@ -172,7 +214,12 @@ class KnowledgeBase:
         return [ApiEntryHit(*row) for row in self._con.execute(sql, params)]
 
     def search(
-        self, query: str, areas: list[str] | None = None, kind: SearchKind = "all", limit: int = MAX_HITS
+        self,
+        query: str,
+        areas: list[str] | None = None,
+        kind: SearchKind = "all",
+        limit: int = MAX_HITS,
+        ranking: Ranking = DEFAULT_RANKING,
     ) -> list[SearchHit]:
         """Ranked Sections for plain words and partial identifiers. Raw query text never reaches FTS5.
 
@@ -189,11 +236,10 @@ class KnowledgeBase:
         known = _match([w for w in words if w in indexed])
         partial = _match([w for w in words if w not in indexed and len(w) >= 3])
         # A Section's score adds its own fields' and its Document's; BM25 scores are negative.
+        section_scores = ranking.scores("sections_fts", (ranking.title, ranking.headings, ranking.body))
+        document_scores = ranking.scores("documents_fts", (ranking.keywords, ranking.toc_paths))
         by_words = self._ranked(
-            f"WITH w AS (SELECT rowid AS id, bm25(sections_fts, {_SECTION_WEIGHTS}) AS score"
-            " FROM sections_fts WHERE sections_fts MATCH ?),"
-            f" d AS (SELECT rowid AS id, bm25(documents_fts, {_DOCUMENT_WEIGHTS}) AS score"
-            " FROM documents_fts WHERE documents_fts MATCH ?),"
+            f"WITH w AS ({section_scores}), d AS ({document_scores}),"
             " scores AS (SELECT id, score FROM w UNION ALL SELECT s.id, d.score FROM d JOIN sections s ON s.document = d.id)"
             f" SELECT s.id FROM scores JOIN sections s ON s.id = scores.id WHERE {scope}"
             " GROUP BY s.id ORDER BY sum(scores.score)",
@@ -295,6 +341,42 @@ class KnowledgeBase:
             for section, locator, release, area, kind, title, heading_path, generated, heuristic in rows
         }
         return [hits[section] for section in sections]
+
+    def document_of(self, locator: str) -> str | None:
+        """The Locator of the Document a source path's Locator is served as: its own, or that of the
+        Document it is an Alias of; None when the Knowledge Base doesn't hold it."""
+        try:
+            row = self._con.execute(
+                "SELECT document FROM document_locators WHERE release = ? AND locator = ?",
+                (self.release, document_part(locator)),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            raise KnowledgeBaseError(
+                f"The Knowledge Base at {self.path} was assembled before it recorded source Locators; rebuild it"
+            ) from None
+        return str(row[0]) if row else None
+
+    def api_entries(self) -> list[ApiEntryHit]:
+        """Every API Entry of the Release, by qualified name."""
+        rows = self._con.execute(
+            "SELECT qualified_name, area, release, signature, description, locator, title, source_path"
+            " FROM api_entries WHERE release = ? ORDER BY qualified_key, area, locator",
+            (self.release,),
+        )
+        return [ApiEntryHit(*row) for row in rows]
+
+    def nav_entries(self, tree: NavTree) -> list[NavEntry]:
+        """Every entry of the table of contents or the keyword index, each with the names leading to it."""
+        rows = self._con.execute(
+            "SELECT id, parent, name, locator, children FROM nav_entries WHERE release = ? AND tree = ?"
+            " ORDER BY id",
+            (self.release, tree),
+        )
+        entries: dict[int, NavEntry] = {}
+        for id_, parent, name, locator, children in rows:
+            path = [*(entries[parent].path if parent in entries else []), name]
+            entries[id_] = NavEntry(path, locator, children)
+        return list(entries.values())
 
     def browse(self, path: str = "", tree: NavTree = "toc") -> BrowseResult:
         """The entries below a table-of-contents book or a keyword, given as names joined by ">".

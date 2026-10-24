@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -246,3 +247,47 @@ async def test_a_server_answers_from_the_one_release_fixed_at_start(
     assert f"Release {other}" not in text
     assert f"Release {served}" in hits
     assert f"Release {other}" not in hits
+
+
+async def test_an_opt_in_query_log_records_each_search_and_lookup(kb: KnowledgeBase, tmp_path: Path) -> None:
+    log = tmp_path / "logs" / "queries.jsonl"
+
+    async with Client(create_server(kb, query_log=log)) as logged:
+        found, _ = await _call(
+            logged, "cst_help_search", {"query": "frequency range", "areas": ["vba-3d"], "limit": 3}
+        )
+        looked_up, _ = await _call(logged, "cst_help_lookup", {"name": "Solver.FrequencyRange"})
+
+    search, lookup = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+    assert (search["tool"], search["query"], search["areas"], search["kind"]) == (
+        "cst_help_search",
+        "frequency range",
+        ["vba-3d"],
+        "all",
+    )
+    assert search["locators"] == _locators(found) and len(search["locators"]) == 3
+    assert (lookup["tool"], lookup["name"], lookup["area"]) == (
+        "cst_help_lookup",
+        "Solver.FrequencyRange",
+        None,
+    )
+    assert lookup["locators"] == _locators(looked_up)
+    assert search["release"] == "2024" and "time" in search
+
+
+async def test_cst_help_serve_writes_the_query_log_it_is_given(vba_kb: Path, tmp_path: Path) -> None:
+    log = tmp_path / "queries.jsonl"
+    command = "import sys; from cst_help_mcp.cli import main; sys.exit(main())"
+    params = StdioServerParameters(
+        command=sys.executable, args=["-c", command, "serve", "--kb", str(vba_kb), "--query-log", str(log)]
+    )
+
+    async with Client(params) as stdio_client:
+        _, is_error = await _call(stdio_client, "cst_help_search", {"query": "MeshProp"})
+
+    assert not is_error
+    assert json.loads(log.read_text(encoding="utf-8"))["query"] == "MeshProp"
+
+
+def _locators(text: str) -> list[str]:
+    return [line.removeprefix("Locator: ") for line in text.splitlines() if line.startswith("Locator: ")]
