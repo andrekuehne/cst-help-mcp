@@ -11,4 +11,4 @@
 - [ ] A Source whose expected structure isn't recognised fails the build. Failures in individual Documents mark the Knowledge Base incomplete, and the server reports it. `--strict` makes any failure fatal.
 - [ ] Sources accept include and exclude filters, so tests and experiments can build part of a Release.
 - [ ] `cst-help validate` detects a missing or inconsistent Build, database or Asset.
-- [ ] Minimal synthetic fixtures cover a Locator collision, an unrecognised structure, and immutability across the pointer switch. They imitate structure only (ADR 0001).
+- [ ] Minimal synthetic fixtures cover a Locator collision, an unrecognised structure, and immutability across the pointer switch. They may be hand-written or cut from real pages (ADR 0001).

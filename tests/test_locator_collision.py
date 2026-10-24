@@ -1,4 +1,4 @@
-"""A Locator collision stops the build. Synthetic fixture: imitates structure only (ADR 0001)."""
+"""A Locator collision stops the build. Synthetic fixture: the real corpus has no collision."""
 
 from __future__ import annotations
 

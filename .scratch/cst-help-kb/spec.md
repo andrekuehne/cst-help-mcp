@@ -12,7 +12,7 @@ I simulate antennas and RF structures in CST Studio Suite. I would like coding a
 - **Agents invent API calls.** Writing CST VBA by hand is tedious and the API is large, so agents guess method names and argument orders. The Control Server's own reference covers only 33 hand-picked objects.
 - **The best knowledge is in examples, not prose.** About three quarters of the Library has no help page, the code uses members the help never documents, and CST's idioms (history-command blocks, Result Template structure, dialogs, settings storage) are spread across hundreds of files.
 - **The markup misleads naive tools.** `<h3>` holds prose, VBA headings exist only as CSS classes, code is one paragraph per line, equations are TeX inside ordinary text, and answers sometimes exist only in a figure.
-- **Licensing constrains everything.** The documentation is Dassault Systèmes' copyrighted material, licensed to me. Nothing derived from it may be published, so the tool must run on each user's own installation.
+- **Licensing constrains everything.** The documentation is Dassault Systèmes' copyrighted material, licensed to me. The tool is internal and never published, but the corpus and built Knowledge Bases stay out of the repository, so the tool must run on each user's own installation (ADR 0001).
 
 ## Solution
 
@@ -338,7 +338,7 @@ A Python tool, `cst-help-mcp` with the CLI `cst-help`, that builds a private, po
   - several Releases in one Knowledge Base;
   - Build immutability and the pointer switch.
 
-  Fixtures are hand-written, imitate the structure only, and never copy vendor content (ADR 0001).
+  Fixtures stay small. They may be hand-written or cut from real pages, and test assertions may quote vendor text (ADR 0001).
 - **Three seams, all high-level:**
   1. **Build, then query.** Build a Collection, or a filtered part of one, into a temporary Knowledge Base. Then check the results through the retrieval core and the files the build wrote: rendered Markdown, entry files, the build report. Reader internals are not tested directly. A quirk such as MathJax TeX, a VBA heading marked only by CSS class, or a `.mtd` Material Set is tested by what it renders and what lookup returns.
   2. **MCP contract,** through the SDK's in-memory client. Covers tool names and parameter schemas, the start of the server instructions, output budgets, image content types, the Release fixed at start, clear errors, and refusal to read outside the Knowledge Base.
