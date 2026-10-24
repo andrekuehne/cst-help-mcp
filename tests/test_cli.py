@@ -251,3 +251,35 @@ def test_logged_queries_become_draft_benchmark_entries(
     assert {d["half"] for d in drafts} == {"held-out"}
     assert all(d["sources"] == [] for d in drafts)
     assert "# returned: a.md#x, b.md" in out
+
+
+def test_read_prints_a_sections_markdown_and_its_links(
+    vba_kb: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["read", f"{SOLVER_HF}#solver", "--kb", str(vba_kb)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert '<a id="solver"></a>\n# Solver Object (HF)\n' in out
+    assert (
+        "FDSolver Object -> vba_3d/special_vbasolver/special_vbasolver_fdsolver_object.htm.md (resolved)"
+        in out
+    )
+
+
+def test_read_prints_the_page_a_cursor_names_and_the_next_cursor(
+    vba_kb: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["read", SOLVER_HF, "--cursor", "2", "--kb", str(vba_kb)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "page 2 of " in out
+    assert "--cursor 3" in out
+
+
+def test_reading_an_unknown_locator_fails_clearly(vba_kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["read", "vba_3d/invented.md", "--kb", str(vba_kb)])
+
+    assert code == 2
+    assert "No Document 'vba_3d/invented.md' in Release 2024" in capsys.readouterr().err

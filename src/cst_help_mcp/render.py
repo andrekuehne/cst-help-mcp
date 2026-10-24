@@ -5,11 +5,30 @@ from __future__ import annotations
 import html
 import json
 import re
+from dataclasses import dataclass, replace
 
-from cst_help_mcp.model import Block, Document, Link, NavNode, escape_label, replace_links
+from cst_help_mcp.model import Block, Document, Link, NavNode, escape_label, link_spans, replace_links
+
+
+@dataclass(frozen=True)
+class Part:
+    """A piece of a Document's Markdown: the frontmatter, a Section's anchors, a line of a block, or
+    the blank line after a block. Joined in order, the parts are the Markdown.
+
+    ``section`` indexes the Document's Sections, and is None for the frontmatter. ``links`` are the
+    label and the index into the Document's links of each link the piece shows.
+    """
+
+    text: str
+    section: int | None
+    links: tuple[tuple[str, int], ...] = ()
 
 
 def render_markdown(doc: Document) -> str:
+    return "".join(part.text for part in render_parts(doc))
+
+
+def render_parts(doc: Document) -> list[Part]:
     front: dict[str, object] = {
         "release": doc.release,
         "area": doc.area,
@@ -27,13 +46,33 @@ def render_markdown(doc: Document) -> str:
         front["aliases"] = doc.aliases
     if doc.alias_areas:
         front["alias_areas"] = doc.alias_areas
-    lines = _frontmatter(front)
-    for section in doc.sections:
-        lines.extend(f'<a id="{anchor}"></a>' for anchor in section.anchors)
+    parts = [Part(_joined(_frontmatter(front)), None)]
+    for i, section in enumerate(doc.sections):
+        if section.anchors:
+            parts.append(Part(_joined([f'<a id="{anchor}"></a>' for anchor in section.anchors]), i))
         for block in section.blocks:
-            lines.extend(_block(block, doc.links))
-            lines.append("")
-    return "\n".join(lines).rstrip("\n") + "\n"
+            for line, sources in _block(block, doc.links):
+                spans = tuple(span for source in sources for span in link_spans(source))
+                parts.append(Part(f"{line}\n", i, spans))
+            parts.append(Part("\n", i))
+    return _trimmed(parts)
+
+
+def _joined(lines: list[str]) -> str:
+    return "".join(f"{line}\n" for line in lines)
+
+
+def _trimmed(parts: list[Part]) -> list[Part]:
+    """The parts without the newlines that end the last ones, but one."""
+    text = "".join(part.text for part in parts)
+    excess = len(text) - len(text.rstrip("\n")) - 1
+    while excess > 0:
+        last = parts.pop()
+        kept = last.text[: max(0, len(last.text) - excess)]
+        excess -= len(last.text) - len(kept)
+        if kept:
+            parts.append(replace(last, text=kept))
+    return parts
 
 
 def render_navigation(release: str, title: str, nodes: list[NavNode]) -> str:
@@ -63,28 +102,34 @@ def _link(label: str, href: str) -> str:
     return f"[{escape_label(label)}]({href})"
 
 
-def _block(block: Block, links: list[Link]) -> list[str]:
+def _block(block: Block, links: list[Link]) -> list[tuple[str, list[str]]]:
+    """The block's lines, each with the model texts whose links it shows."""
+
     def inline(text: str) -> str:
         return _inline(text, links)
 
     match block.kind:
         case "heading":
-            return [f"{'#' * block.level} {inline(block.text)}"]
+            return [(f"{'#' * block.level} {inline(block.text)}", [block.text])]
         case "paragraph":
-            return [inline(block.text)]
+            return [(inline(block.text), [block.text])]
         case "list":
-            return [f"- {inline(item)}" for item in block.items]
+            return [(f"- {inline(item)}", [item]) for item in block.items]
         case "note":
-            return [f"> **Note:** {inline(block.text)}"]
+            return [(f"> **Note:** {inline(block.text)}", [block.text])]
         case "field":
-            return [f"**{block.term}**", *([f": {inline(block.text)}"] if block.text else [])]
+            term: tuple[str, list[str]] = (f"**{block.term}**", [])
+            return [term, *([(f": {inline(block.text)}", [block.text])] if block.text else [])]
         case "code" | "api_signature":
-            return [_fence(block.text) + block.language, block.text, _fence(block.text)]
+            fence = _fence(block.text)
+            return [(fence + block.language, []), (block.text, []), (fence, [])]
         case "table":
             # Markdown cannot merge cells, so a table with merged cells stays HTML (ADR 0007).
             if block.spans:
-                return _html_table([[_inline_html(c, links) for c in r] for r in block.rows], block.spans)
-            return _table([[inline(c) for c in r] for r in block.rows])
+                rows = _html_table([[_inline_html(c, links) for c in r] for r in block.rows], block.spans)
+                return list(zip(rows, [[], *block.rows, []], strict=True))
+            rows = _table([[inline(c) for c in r] for r in block.rows])
+            return list(zip(rows, [block.rows[0], [], *block.rows[1:]], strict=True))
 
 
 def _href(link: Link) -> str | None:

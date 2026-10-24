@@ -77,6 +77,14 @@ def _parser() -> argparse.ArgumentParser:
     browse.add_argument("--tree", choices=list(NAV_TREES), default="toc")
     browse.set_defaults(run=_browse)
 
+    read = commands.add_parser(
+        "read", help="print the Markdown of a Section, or of a Document, by its Locator"
+    )
+    read.add_argument("locator", help="a Locator; without its #anchor for the whole Document")
+    _add_kb_arguments(read)
+    read.add_argument("--cursor", help="the page to print, as the previous page gave it")
+    read.set_defaults(run=_read)
+
     benchmark = commands.add_parser(
         "benchmark", help="score the retrieval benchmark against the Knowledge Base, and tune search on it"
     )
@@ -227,6 +235,24 @@ def _browse(args: argparse.Namespace) -> int:
     for entry in result.entries:
         locator = f"  [{entry.locator}]" if entry.locator else ""
         print(f"- {entry}{locator}")
+    return 0
+
+
+def _read(args: argparse.Namespace) -> int:
+    with KnowledgeBase.open(args.kb, args.release) as kb:
+        page = kb.read(args.locator, cursor=args.cursor)
+    print(f"{page.locator}  [{page.area}, {page.release}, page {page.page} of {page.pages}]")
+    print(f"  Source: {page.source_path}")
+    print()
+    sys.stdout.write(page.text)
+    if page.links:
+        print()
+        print("Links:")
+        for link in page.links:
+            print(f"- {link}")
+    if page.next_cursor:
+        print()
+        print(f"More follows: read it with --cursor {page.next_cursor}")
     return 0
 
 

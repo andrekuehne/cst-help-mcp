@@ -17,7 +17,8 @@ from cst_help_mcp import layout
 from cst_help_mcp.errors import KnowledgeBaseError
 from cst_help_mcp.index import name_key, open_read_only
 from cst_help_mcp.locator import document_part
-from cst_help_mcp.model import CODE_KINDS, SEPARATOR, NavTree
+from cst_help_mcp.model import CODE_KINDS, SEPARATOR, Document, NavTree
+from cst_help_mcp.reading import Page, read_page
 
 MAX_HITS = 10
 _CANDIDATES = 100  # Sections each index contributes before the tiers are merged
@@ -355,6 +356,49 @@ class KnowledgeBase:
                 f"The Knowledge Base at {self.path} was assembled before it recorded source Locators; rebuild it"
             ) from None
         return str(row[0]) if row else None
+
+    def read(self, locator: str, cursor: str | None = None) -> Page:
+        """A page of the Section a Locator names, or of its Document when it has no anchor.
+
+        The Locator may be an Alias's. Without a cursor the first page is read; each page gives
+        the cursor of the next.
+        """
+        document = self.document_of(locator)
+        if document is None:
+            raise KnowledgeBaseError(self._unknown_document(document_part(locator)))
+        markdown = self._file(document)
+        model = markdown.with_name(f"{markdown.name}.json")
+        doc = Document.from_dict(layout.read_json(model))
+        text = markdown.read_text(encoding="utf-8", newline="")
+        return read_page(doc, text, locator.partition("#")[2] or None, cursor)
+
+    def _file(self, document: str) -> Path:
+        """The Markdown file of a Document in the Build this database was assembled from.
+
+        The readable view holds the same file while this assembly is active, but switches to the
+        next Build when another becomes active.
+        """
+        builds = self._con.execute(
+            "SELECT name, build FROM collections WHERE release = ? ORDER BY name", (self.release,)
+        )
+        for collection, build in builds:
+            file = layout.build_dir(self.path, collection, build) / layout.TREE / document
+            if file.is_file():
+                return file
+        raise KnowledgeBaseError(f"The file of {document} is missing from {self.path}; run cst-help validate")
+
+    def _unknown_document(self, locator: str) -> str:
+        message = f"No Document '{locator}' in Release {self.release}"
+        known = [
+            r[0]
+            for r in self._con.execute(
+                "SELECT DISTINCT document FROM document_locators WHERE release = ?", (self.release,)
+            )
+        ]
+        nearest = difflib.get_close_matches(locator, known, n=3)
+        if nearest:
+            message += f"; nearest: {', '.join(nearest)}"
+        return message + "; search finds the Locators of a subject"
 
     def api_entries(self) -> list[ApiEntryHit]:
         """Every API Entry of the Release, by qualified name."""

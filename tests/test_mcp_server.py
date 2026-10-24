@@ -44,7 +44,7 @@ async def client(kb: KnowledgeBase) -> AsyncIterator[Client]:
 async def test_exposes_its_tools_with_their_parameters(client: Client) -> None:
     tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
-    assert set(tools) == {"cst_help_lookup", "cst_help_search", "cst_help_browse"}
+    assert set(tools) == {"cst_help_lookup", "cst_help_search", "cst_help_browse", "cst_help_read"}
     lookup: dict[str, Any] = tools["cst_help_lookup"].input_schema
     assert set(lookup["properties"]) == {"name", "area"}
     assert lookup["required"] == ["name"]
@@ -55,6 +55,9 @@ async def test_exposes_its_tools_with_their_parameters(client: Client) -> None:
     browse: dict[str, Any] = tools["cst_help_browse"].input_schema
     assert set(browse["properties"]) == {"path", "tree"}
     assert browse.get("required", []) == []
+    read: dict[str, Any] = tools["cst_help_read"].input_schema
+    assert set(read["properties"]) == {"locator", "cursor"}
+    assert read["required"] == ["locator"]
 
 
 async def test_lookup_returns_signature_description_locator_and_release(client: Client) -> None:
@@ -160,6 +163,50 @@ async def test_browsing_an_unknown_entry_is_a_clear_error(client: Client) -> Non
     assert "nearest: Automation and Scripting" in text
 
 
+async def test_read_returns_a_sections_markdown_exactly_with_its_links(
+    client: Client, kb: KnowledgeBase
+) -> None:
+    text, is_error = await _call(client, "cst_help_read", {"locator": f"{SOLVER_HF}#solver"})
+
+    assert not is_error
+    assert text.startswith(
+        f"Solver Object  [vba-3d, Release 2024, page 1 of 1]\nLocator: {SOLVER_HF}#solver\n"
+    )
+    assert kb.read(f"{SOLVER_HF}#solver").text in text
+    assert (
+        "- FDSolver Object -> vba_3d/special_vbasolver/special_vbasolver_fdsolver_object.htm.md (resolved)"
+        in text
+    )
+    assert "cursor" not in text
+
+
+async def test_read_pages_a_long_document_within_budget_and_gives_the_cursor(client: Client) -> None:
+    first, _ = await _call(client, "cst_help_read", {"locator": SOLVER_HF})
+    second, is_error = await _call(client, "cst_help_read", {"locator": SOLVER_HF, "cursor": "2"})
+
+    assert not is_error
+    assert "page 1 of " in first and "page 2 of " in second
+    assert 'call cst_help_read again with cursor "2"' in first
+    assert _max_tokens(first) < 10_000 and _max_tokens(second) < 10_000
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"locator": "vba_3d/invented.md"}, "No Document 'vba_3d/invented.md' in Release 2024"),
+        ({"locator": SOLVER_HF, "cursor": "99"}, "Cursor '99' is no page of"),
+        ({"locator": "../../active.json"}, "No Document '../../active.json'"),
+    ],
+)
+async def test_reading_an_unknown_locator_or_cursor_is_a_clear_error(
+    client: Client, arguments: dict[str, Any], message: str
+) -> None:
+    text, is_error = await _call(client, "cst_help_read", arguments)
+
+    assert is_error
+    assert message in text
+
+
 async def test_search_limit_above_ten_is_refused(client: Client) -> None:
     _, is_error = await _call(client, "cst_help_search", {"query": "solver", "limit": 50})
 
@@ -194,6 +241,7 @@ async def test_the_instructions_give_the_not_documented_rule_and_the_knowledge_b
     instructions = client.instructions or ""
 
     assert "not documented" in instructions
+    assert "cst_help_read" in instructions
     assert str(kb.path.resolve()) in instructions
 
 

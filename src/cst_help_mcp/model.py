@@ -54,6 +54,11 @@ def replace_links(text: str, replace: Callable[[str, int], str]) -> str:
     return _LINK_SPAN.sub(lambda m: replace(_ESCAPED.sub(r"\1", m[1]), int(m[2])), text)
 
 
+def link_spans(text: str) -> list[tuple[str, int]]:
+    """The label, unescaped, and the index of each link span in the text."""
+    return [(_ESCAPED.sub(r"\1", m[1]), int(m[2])) for m in _LINK_SPAN.finditer(text)]
+
+
 def plain(text: str) -> str:
     """Text with its link spans reduced to their labels."""
     return replace_links(text, lambda label, _: label)

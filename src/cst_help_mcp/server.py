@@ -14,10 +14,9 @@ from pydantic import Field
 from cst_help_mcp.errors import CstHelpError
 from cst_help_mcp.model import NavTree
 from cst_help_mcp.querylog import QueryLog
+from cst_help_mcp.reading import CHARS_PER_TOKEN, Page
 from cst_help_mcp.retrieval import MAX_HITS, BrowseEntry, KnowledgeBase, SearchKind
 
-# Budgets are counted in characters at a pessimistic three characters per token.
-CHARS_PER_TOKEN = 3
 RESPONSE_BUDGET = 9_000 * CHARS_PER_TOKEN  # under the 10,000-token limit for every response
 SEARCH_BUDGET = 3_000 * CHARS_PER_TOKEN  # about 3,000 tokens for a page of ten hits
 
@@ -37,6 +36,7 @@ def server_instructions(kb: KnowledgeBase) -> str:
         f"{routing}\n\n"
         "If cst_help_lookup says an identifier is not documented and cst_help_search finds nothing "
         "either, tell the user so and do not invent the method, its arguments or its behaviour.\n\n"
+        "Read a result's Section, or its whole Document without the #anchor, with cst_help_read.\n\n"
         "To explore a subject systematically, call cst_help_browse on the table of contents "
         "or the author keyword index.\n\n"
         f"{_incompleteness(kb)}"
@@ -144,7 +144,42 @@ def create_server(kb: KnowledgeBase, query_log: Path | None = None) -> MCPServer
             separator="\n",
         )
 
+    @server.tool(name="cst_help_read", structured_output=False)
+    async def read(
+        locator: Annotated[
+            str,
+            Field(
+                description="a Locator from a search or lookup; without its #anchor for the whole Document"
+            ),
+        ],
+        cursor: Annotated[str | None, Field(description="the cursor the previous page gave")] = None,
+    ) -> str:
+        """Read a Section's Markdown, or a whole Document's, by its Locator, in pages of about 8,000 tokens.
+
+        Each page lists its outgoing links with their status.
+        """
+        with _reported_as_tool_errors():
+            page = kb.read(locator, cursor=cursor)
+        return _page(page)
+
     return server
+
+
+def _page(page: Page) -> str:
+    """A page under a header naming it, then its links and how to read the next page.
+
+    The page's text is given exactly, so it ends with its own newline.
+    """
+    header = (
+        f"{page.title}  [{page.area}, Release {page.release}, page {page.page} of {page.pages}]\n"
+        f"Locator: {page.locator}\nSource: {page.source_path}\n\n"
+    )
+    after = []
+    if page.links:
+        after.append("\n".join(["Links:", *(f"- {link}" for link in page.links)]))
+    if page.next_cursor:
+        after.append(f'More follows: call cst_help_read again with cursor "{page.next_cursor}".')
+    return header + page.text + "".join(f"\n{part}\n" for part in after)
 
 
 @contextmanager

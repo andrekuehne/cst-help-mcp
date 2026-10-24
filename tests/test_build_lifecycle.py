@@ -45,9 +45,11 @@ def test_a_server_opened_before_a_rebuild_keeps_answering_from_its_build(tmp_pat
 
         assert second.build_id != first.build_id
         assert [h.description for h in running.lookup("Widget.Spin")] == ["Old."]
+        assert "Old." in running.read("vba_3d/widgets/widget.htm.md").text
         assert _snapshot(first_build) == before
         with KnowledgeBase.open(tmp_path / "kb") as restarted:
             assert [h.description for h in restarted.lookup("Widget.Spin")] == ["New."]
+            assert "New." in restarted.read("vba_3d/widgets/widget.htm.md").text
 
 
 def test_a_rebuild_removes_the_builds_and_assemblies_no_server_holds(tmp_path: Path) -> None:
