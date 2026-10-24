@@ -1,16 +1,43 @@
 [project]
 name = "cst-help-mcp"
 version = "0.1.0"
-description = "Add your description here"
+description = "Build a private Knowledge Base from your own CST Studio Suite help and serve it to coding agents"
 readme = "README.md"
+license = "MIT"
 authors = [
     { name = "André Kühne", email = "andre.kuehne@gmail.com" }
 ]
 requires-python = ">=3.13"
 dependencies = []
 
+[project.optional-dependencies]
+build = [
+    "beautifulsoup4>=4.13",
+]
+
 [project.scripts]
-cst-help-mcp = "cst_help_mcp:main"
+cst-help = "cst_help_mcp.cli:main"
+
+[dependency-groups]
+dev = [
+    "cst-help-mcp[build]",
+    "pytest>=8",
+    "mypy>=1.15",
+    "ruff>=0.12",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]

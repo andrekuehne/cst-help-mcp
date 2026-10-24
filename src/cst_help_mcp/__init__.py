@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from cst-help-mcp!")
+"""Build a private Knowledge Base from a CST Studio Suite installation and serve it to agents."""
