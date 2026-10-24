@@ -41,6 +41,15 @@ def test_search_command_prints_matching_locators(vba_kb: Path, capsys: pytest.Ca
     assert f"{SOLVER_HF}#frequencyrange" in capsys.readouterr().out
 
 
+def test_search_command_narrows_by_kind(vba_kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    prose = main(["search", "frequency range", "--kind", "prose", "--kb", str(vba_kb)])
+    out = capsys.readouterr().out
+    code = main(["search", "frequency range", "--kind", "code", "--kb", str(vba_kb)])
+
+    assert (prose, code) == (0, 1)
+    assert f"{SOLVER_HF}#frequencyrange  [vba-3d, topic, 2024]" in out
+
+
 def test_build_from_cli(corpus_2024: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     config = write_config(
         tmp_path / "cst-help.toml",

@@ -1,5 +1,5 @@
-"""The Knowledge Base's SQLite index: the exact API Entry table, an FTS5 word index (ADR 0008)
-and the navigation trees."""
+"""The Knowledge Base's SQLite index: the exact API Entry table, FTS5 word indexes of Sections and
+of Documents, a trigram index of names (ADR 0008) and the navigation trees."""
 
 from __future__ import annotations
 
@@ -28,19 +28,23 @@ CREATE TABLE IF NOT EXISTS api_entries (
     description TEXT NOT NULL,
     locator TEXT NOT NULL,
     title TEXT NOT NULL,
-    source_path TEXT NOT NULL
+    source_path TEXT NOT NULL,
+    section INTEGER  -- the Section that holds the entry's anchor
 );
 CREATE INDEX IF NOT EXISTS api_entries_qualified ON api_entries (qualified_key);
 CREATE INDEX IF NOT EXISTS api_entries_member ON api_entries (member_key);
 CREATE TABLE IF NOT EXISTS sections (
     id INTEGER PRIMARY KEY,
+    document INTEGER NOT NULL,  -- the rowid of its Document in documents_fts
     collection TEXT NOT NULL,
     release TEXT NOT NULL,
     area TEXT NOT NULL,
     kind TEXT NOT NULL,
     locator TEXT NOT NULL,
     title TEXT NOT NULL,
-    heading_path TEXT NOT NULL
+    heading_path TEXT NOT NULL,
+    generated INTEGER NOT NULL,
+    heuristic INTEGER NOT NULL
 );
 -- Every Area a Section is found under: its Document's own, and those of its Aliases.
 CREATE TABLE IF NOT EXISTS section_areas (
@@ -48,9 +52,16 @@ CREATE TABLE IF NOT EXISTS section_areas (
     area TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS section_areas_area ON section_areas (area, section);
-CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5 (
-    title, headings, body, tokenize = 'unicode61'
-);
+CREATE INDEX IF NOT EXISTS sections_document ON sections (document);
+CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5 (title, headings, body, tokenize = 'unicode61');
+-- What a Document's Sections share, indexed once per Document: BM25 normalises by the length
+-- of a row, so a long keyword list in every Section's row would count against each of them.
+CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5 (keywords, toc_paths, tokenize = 'unicode61');
+-- The terms of the word indexes, so search can tell which query words they hold.
+CREATE VIRTUAL TABLE IF NOT EXISTS sections_vocab USING fts5vocab (sections_fts, row);
+CREATE VIRTUAL TABLE IF NOT EXISTS documents_vocab USING fts5vocab (documents_fts, row);
+-- A Section's names (its title, heading path and API signatures), for partial identifiers.
+CREATE VIRTUAL TABLE IF NOT EXISTS sections_trigram USING fts5 (names, tokenize = 'trigram');
 -- The table of contents and the keyword index, each in its order.
 CREATE TABLE IF NOT EXISTS nav_entries (
     id INTEGER PRIMARY KEY,
@@ -106,9 +117,51 @@ def write_index(db_path: Path, builds: Iterable[IndexedBuild]) -> None:
 
 
 def _insert(con: sqlite3.Connection, collection: str, doc: Document) -> None:
+    sections: dict[str, int] = {}  # each anchor's Section
+    document = con.execute(
+        "INSERT INTO documents_fts (keywords, toc_paths) VALUES (?, ?)",
+        ("\n".join(doc.keywords), "\n".join(doc.toc_paths)),
+    ).lastrowid
+    for section in doc.sections:
+        locator = f"{doc.locator}#{section.anchor}" if section.anchor else doc.locator
+        headings = " ".join(b.plain_text() for b in section.blocks if b.kind == "heading")
+        body = "\n".join(b.plain_text() for b in section.blocks if b.kind != "heading")
+        cur = con.execute(
+            "INSERT INTO sections"
+            " (document, collection, release, area, kind, locator, title, heading_path, generated, heuristic)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                document,
+                collection,
+                doc.release,
+                doc.area,
+                doc.kind,
+                locator,
+                doc.title,
+                " > ".join(section.heading_path),
+                doc.generated,
+                doc.heuristic,
+            ),
+        )
+        section_id = cur.lastrowid
+        assert section_id is not None
+        sections.update((anchor, section_id) for anchor in section.anchors)
+        con.execute(
+            "INSERT INTO sections_fts (rowid, title, headings, body) VALUES (?, ?, ?, ?)",
+            (section_id, doc.title, headings, body),
+        )
+        names = [doc.title, *section.heading_path]
+        names += [b.plain_text() for b in section.blocks if b.kind == "api_signature"]
+        con.execute(
+            "INSERT INTO sections_trigram (rowid, names) VALUES (?, ?)", (section_id, "\n".join(names))
+        )
+        con.executemany(
+            "INSERT INTO section_areas VALUES (?, ?)",
+            [(section_id, area) for area in (doc.area, *doc.alias_areas)],
+        )
     for entry in doc.api_entries:
         con.execute(
-            "INSERT INTO api_entries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO api_entries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 collection,
                 doc.release,
@@ -121,32 +174,8 @@ def _insert(con: sqlite3.Connection, collection: str, doc: Document) -> None:
                 f"{doc.locator}#{entry.anchor}",
                 doc.title,
                 doc.source_path,
+                sections.get(entry.anchor),
             ),
-        )
-    for section in doc.sections:
-        locator = f"{doc.locator}#{section.anchor}" if section.anchor else doc.locator
-        headings = " ".join(b.plain_text() for b in section.blocks if b.kind == "heading")
-        body = "\n".join(b.plain_text() for b in section.blocks if b.kind != "heading")
-        cur = con.execute(
-            "INSERT INTO sections (collection, release, area, kind, locator, title, heading_path)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                collection,
-                doc.release,
-                doc.area,
-                doc.kind,
-                locator,
-                doc.title,
-                " > ".join(section.heading_path),
-            ),
-        )
-        con.execute(
-            "INSERT INTO sections_fts (rowid, title, headings, body) VALUES (?, ?, ?, ?)",
-            (cur.lastrowid, doc.title, headings, body),
-        )
-        con.executemany(
-            "INSERT INTO section_areas VALUES (?, ?)",
-            [(cur.lastrowid, area) for area in (doc.area, *doc.alias_areas)],
         )
 
 

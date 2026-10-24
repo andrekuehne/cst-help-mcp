@@ -12,7 +12,7 @@ from pydantic import Field
 
 from cst_help_mcp.errors import CstHelpError
 from cst_help_mcp.model import NavTree
-from cst_help_mcp.retrieval import MAX_HITS, BrowseEntry, KnowledgeBase
+from cst_help_mcp.retrieval import MAX_HITS, BrowseEntry, KnowledgeBase, SearchKind
 
 # Budgets are counted in characters at a pessimistic three characters per token.
 CHARS_PER_TOKEN = 3
@@ -87,18 +87,22 @@ def create_server(kb: KnowledgeBase) -> MCPServer:
     async def search(
         query: Annotated[str, Field(description="plain words")],
         areas: Annotated[list[str] | None, Field(description="limit to these Areas")] = None,
+        kind: Annotated[SearchKind, Field(description="explanations (prose), working code, or all")] = "all",
         limit: Annotated[int, Field(ge=1, le=MAX_HITS)] = MAX_HITS,
     ) -> str:
-        """Search the help by plain words; returns ranked Sections with their Locators."""
+        """Search the help by plain words or partial names; returns ranked Sections with their Locators.
+
+        API Entries named in the query come first.
+        """
         with _reported_as_tool_errors():
-            hits = kb.search(query, areas=areas, limit=limit)
+            hits = kb.search(query, areas=areas, kind=kind, limit=limit)
         if not hits:
             return f"No hits for '{query}' in Release {kb.release}."
         return _within_budget(
             f"{len(hits)} hits for '{query}' in Release {kb.release}:",
             (
                 _item(
-                    f"{hit.title}  [{hit.area}, Release {hit.release}]",
+                    f"{hit.title}  [{', '.join(hit.labels)}, Release {hit.release}]",
                     [hit.heading_path, hit.snippet],
                     hit.locator,
                 )

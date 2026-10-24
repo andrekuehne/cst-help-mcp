@@ -10,9 +10,10 @@ import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import get_args
 
 from cst_help_mcp.errors import CstHelpError
-from cst_help_mcp.retrieval import NAV_TREES, KnowledgeBase
+from cst_help_mcp.retrieval import NAV_TREES, KnowledgeBase, SearchKind
 
 DEFAULT_CONFIG = "cst-help.toml"
 
@@ -61,6 +62,7 @@ def _parser() -> argparse.ArgumentParser:
     search.add_argument("query", nargs="+")
     _add_kb_arguments(search)
     search.add_argument("--area", action="append", dest="areas")
+    search.add_argument("--kind", choices=get_args(SearchKind), default="all")
     search.add_argument("--limit", type=int, default=10)
     search.set_defaults(run=_search)
 
@@ -166,12 +168,12 @@ def _lookup(args: argparse.Namespace) -> int:
 
 def _search(args: argparse.Namespace) -> int:
     with KnowledgeBase.open(args.kb, args.release) as kb:
-        hits = kb.search(" ".join(args.query), areas=args.areas, limit=args.limit)
+        hits = kb.search(" ".join(args.query), areas=args.areas, kind=args.kind, limit=args.limit)
     if not hits:
         print("No hits.")
         return 1
     for hit in hits:
-        print(f"{hit.locator}  [{hit.area}, {hit.release}]")
+        print(f"{hit.locator}  [{', '.join(hit.labels)}, {hit.release}]")
         print(f"  {hit.heading_path}")
         print(f"  {hit.snippet}")
         print()

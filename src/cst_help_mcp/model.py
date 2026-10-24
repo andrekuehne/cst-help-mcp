@@ -15,6 +15,8 @@ from typing import Any, Literal
 BlockKind = Literal["heading", "paragraph", "note", "list", "field", "code", "table", "api_signature"]
 LinkStatus = Literal["unresolved", "resolved", "external", "outside"]
 NavTree = Literal["toc", "keywords"]  # the table of contents and the author keyword index
+# The Document kinds that hold code rather than prose; the Library's readers add theirs.
+CODE_KINDS: frozenset[str] = frozenset()
 # Joins the names of a table-of-contents path ("3D Simulation > Solvers") or a sub-keyword.
 SEPARATOR = " > "
 
@@ -126,6 +128,8 @@ class Document:
     context_ids: list[str] = field(default_factory=list)  # context-help map ids
     # The breadcrumb paths embedded in the source, relative to its own project's table of contents.
     breadcrumbs: list[str] = field(default_factory=list)
+    generated: bool = False  # written in an agent session, such as a Guide (ADR 0010)
+    heuristic: bool = False  # found by the build's heuristics, such as Usages (ADR 0012)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

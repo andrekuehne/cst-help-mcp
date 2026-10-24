@@ -48,7 +48,7 @@ async def test_exposes_its_tools_with_their_parameters(client: Client) -> None:
     assert set(lookup["properties"]) == {"name", "area"}
     assert lookup["required"] == ["name"]
     search: dict[str, Any] = tools["cst_help_search"].input_schema
-    assert set(search["properties"]) == {"query", "areas", "limit"}
+    assert set(search["properties"]) == {"query", "areas", "kind", "limit"}
     assert search["required"] == ["query"]
     assert search["properties"]["limit"]["maximum"] == 10
     browse: dict[str, Any] = tools["cst_help_browse"].input_schema
@@ -104,6 +104,17 @@ async def test_search_returns_at_most_ten_hits_naming_locator_and_release(client
     assert text.count("Locator: ") == 10
     assert text.count("Release 2024") >= 10
     assert _max_tokens(text) <= 3_000
+
+
+async def test_search_names_each_hits_area_and_kind_and_narrows_by_kind(client: Client) -> None:
+    text, is_error = await _call(
+        client, "cst_help_search", {"query": "Solver.FrequencyRange", "kind": "prose"}
+    )
+    nothing, _ = await _call(client, "cst_help_search", {"query": "Solver.FrequencyRange", "kind": "code"})
+
+    assert not is_error
+    assert "## Solver Object  [vba-3d, topic, Release 2024]" in text
+    assert nothing.startswith("No hits")
 
 
 SOLVER_BOOK = "Automation and Scripting > Visual Basic (VBA) > 3D Simulation VBA > VBA Objects > Solver"
