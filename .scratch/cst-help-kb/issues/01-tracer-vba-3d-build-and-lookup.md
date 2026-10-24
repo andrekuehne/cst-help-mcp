@@ -16,4 +16,7 @@ This is the thinnest path through every layer: configuration, the RoboHelp reade
 - [ ] Each Markdown file has frontmatter with the Release, Area, title and original source path. The Document model is persisted next to it.
 - [ ] `cst-help lookup` ignores case. A bare member name returns every object that has it, and same-titled pages (the two "Solver Object" pages) stay distinct. Methods documented on the Application object ("Project Object") resolve by bare name, for example `AddToHistory`.
 - [ ] `cst-help search` finds VBA topics by plain words.
-- [ ] A corpus test at the build-then-query seam passes, and skips with a clear message when `.ingestion/2024` is absent. Benchmark question API-01 resolves through lookup.
+- [ ] A corpus test at the build-then-query seam passes, and benchmark question API-01 resolves through lookup.
+- [ ] Corpus tests find the corpus from any checkout, in the order the spec gives: an environment variable naming the release folder, then `.ingestion/<release>/` in the current checkout, then the same in the repository's main checkout. Run from a git worktree with no `.ingestion/`, they still find and use the corpus.
+- [ ] A configured corpus location that is missing fails the run. Finding no corpus at all fails too, unless the explicit skip opt-out is set. Every run reports which corpus it used, or that the corpus tier was skipped and why.
+- [ ] Test Knowledge Bases are built in temporary directories, never inside the checkout.

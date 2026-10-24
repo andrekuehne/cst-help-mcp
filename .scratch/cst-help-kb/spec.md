@@ -275,7 +275,7 @@ A Python tool, `cst-help-mcp` with the CLI `cst-help`, that builds a private, po
 
 ### Builds and assembly
 
-- **Builds** (ADR 0009): each Collection is built into a new, immutable Build directory. Only PDF conversion is cached, keyed by content hash plus converter version and settings.
+- **Builds** (ADR 0009): each Collection is built into a new, immutable Build directory. Only PDF conversion is cached, keyed by content hash plus converter version and settings. The cache lives outside both the Knowledge Base and the checkout: a per-user cache directory by default, configurable. It is never part of a portable Knowledge Base.
 - **Assembly** combines the active Builds into the Knowledge Base's database and entry files, then switches the active pointer atomically.
 - **Each Collection's entry files:** `toc.md`, `keywords.md`, `api-index.md`, a Library menu tree, and a materials index.
 - **Workspace files written by assembly** (ADR 0013):
@@ -321,7 +321,15 @@ A Python tool, `cst-help-mcp` with the CLI `cst-help`, that builds a private, po
 
 ## Testing Decisions
 
-- **Real data first.** The CST 2024 corpus is under `.ingestion/2024/` on every development machine, so tests build from it and check what users will get. Corpus tests skip with a clear message when the folder is absent.
+- **Real data first.** Every development machine has the CST 2024 corpus, so tests build from it and check what users will get.
+- **Finding the corpus from any checkout.** `.ingestion/` is gitignored, so a git worktree (for example one used by an implementer subagent) doesn't contain it. Corpus tests resolve the corpus in this order:
+  1. an environment variable naming the release folder. This may be the installation itself, such as `C:\Program Files (x86)\CST Studio Suite 2024`;
+  2. `.ingestion/<release>/` in the current checkout;
+  3. `.ingestion/<release>/` in the repository's main checkout, found through git's common directory, so worktrees use it automatically.
+- **Failing instead of silently skipping.**
+  - A location that is configured but missing or unreadable is a test **failure**, never a skip.
+  - When nothing is found at all, corpus tests skip only if an explicit opt-out is set (for a future CI without licensed data). Otherwise they fail with a message naming every place searched.
+  - Every test run reports which corpus it used, or that the corpus tier was skipped and why. A green run can therefore never hide an empty corpus tier.
 - **Synthetic fixtures stay minimal.** They're used only for behaviour the corpus can't exercise:
   - Locator collisions;
   - a Source whose structure isn't recognised, failing the build;
@@ -336,7 +344,7 @@ A Python tool, `cst-help-mcp` with the CLI `cst-help`, that builds a private, po
   2. **MCP contract,** through the SDK's in-memory client. Covers tool names and parameter schemas, the start of the server instructions, output budgets, image content types, the Release fixed at start, clear errors, and refusal to read outside the Knowledge Base.
   3. **Benchmark.** `docs/benchmark-draft.md`, turned into a machine-readable form, is scored by whether an expected source is among the top five, and how high, per category. Expected sources are mapped from source paths to Locators mechanically. Pass thresholds are set after the first baseline run. The "not in the documentation" questions and the agent checks in Claude Code, Cursor and later Codex stay manual.
 - **Good tests check external behaviour:** search and lookup results, rendered files and MCP responses. They never check private data structures, so the internals can be refactored freely.
-- **Speed:** tests build filtered parts of a Release (for example VBA 3D plus WinWrap Basic) and share one Build per test session. The PDF cache keeps repeated runs fast.
+- **Speed:** tests build filtered parts of a Release (for example VBA 3D plus WinWrap Basic) and share one Build per test session. The PDF cache keeps repeated runs fast, and because it lives in a per-user directory, worktrees and repeated runs share it. Test Knowledge Bases are written to temporary directories, never into the checkout.
 - **Prior art:** none in the repo yet, since the package is a stub. Follow the `tdd` skill: red, green, refactor at these seams.
 
 ## Out of Scope

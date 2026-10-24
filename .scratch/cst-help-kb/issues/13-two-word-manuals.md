@@ -9,6 +9,7 @@
 - [ ] A PDF without a text layer is a reported failure.
 - [ ] Sections follow the tagged H1-H3 headings, every page has a `page-<n>` anchor, and running headers and footers are removed.
 - [ ] The conversion cache is keyed by file content plus converter version and settings, and a rebuild with no changes skips conversion.
+- [ ] The cache lives in a configurable per-user directory, outside the Knowledge Base and the checkout, so every worktree and test run shares it.
 - [ ] PDF-01 and PDF-02 find their pages.
 - [ ] Rendering a page or region at serve time needs no OCR or conversion dependencies.
 - [ ] The build report notes whether formulas in these manuals come out as text glyphs. That decides whether Docling's formula model gets switched on.
