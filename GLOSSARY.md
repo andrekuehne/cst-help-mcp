@@ -23,8 +23,12 @@ A part of a Collection that comes from one help project or document family, such
 _Avoid_: module, category, project
 
 **Build**:
-One immutable result of building a single Collection from its Sources. A Knowledge Base serves the active Build of each Collection; a new Build takes over only once it is complete.
+One immutable result of building a single Collection from its Sources. A Knowledge Base serves the Builds of its active Assembly, so a new Build takes over only after it is assembled.
 _Avoid_: version, snapshot, run
+
+**Assembly**:
+One immutable combination of one Build per Collection, together with the search index and entry files that come from them. A Knowledge Base serves one active Assembly at a time.
+_Avoid_: deployment, snapshot, index
 
 **Source**:
 One input folder of a Collection together with the format it is written in, such as RoboHelp help, a Sphinx reference, a folder of PDFs or the Library.
