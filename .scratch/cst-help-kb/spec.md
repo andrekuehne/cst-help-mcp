@@ -176,7 +176,7 @@ A Python tool, `cst-help-mcp` with the CLI `cst-help`, that builds a private, po
 
   | Area | Contents |
   |---|---|
-  | `general` | General features, user interface, ribbons, advanced, license, simulation acceleration, and the Python menu topics at the help root |
+  | `general` | General features, user interface, ribbons, advanced, license, simulation acceleration, and the Python menu topics at the help root until the `python` Area exists |
   | `3d` | 3D Simulation |
   | `circuits` | DES |
   | `pcb` | PCB |
@@ -185,7 +185,7 @@ A Python tool, `cst-help-mcp` with the CLI `cst-help`, that builds a private, po
   | `vba-3d` | VBA for the 3D modeler, and the root project's VBA overview |
   | `vba-schematic` | VBA_DES |
   | `winwrap-basic` | WinWrap Basic language reference |
-  | `python` | Python reference |
+  | `python` | Python reference, its RoboHelp overview topic, and the Python menu topics at the help root |
   | `example-projects` | `EXP_*` |
   | `manuals` | Word manuals and release notes |
   | `macros` | Macros and Includes |
