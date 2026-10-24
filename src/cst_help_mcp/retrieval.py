@@ -47,6 +47,12 @@ class KnowledgeBase:
         self._con = con
         self.path = path
         self.release = release
+        self.areas = [
+            r[0]
+            for r in con.execute(
+                "SELECT DISTINCT area FROM sections WHERE release = ? ORDER BY area", (release,)
+            )
+        ]
 
     @classmethod
     def open(cls, path: Path, release: str | None = None) -> KnowledgeBase:
@@ -79,6 +85,8 @@ class KnowledgeBase:
 
     def lookup(self, name: str, area: str | None = None) -> list[ApiEntryHit]:
         """Exact API Entries for ``Object.Member``, a bare member or object name; case is ignored."""
+        if area:
+            self._check_areas([area])
         key = name.strip().lower()
         obj, dot, member = key.partition(".")
         if dot and obj in _OBJECT_ALIASES:
@@ -97,6 +105,8 @@ class KnowledgeBase:
 
     def search(self, query: str, areas: list[str] | None = None, limit: int = MAX_HITS) -> list[SearchHit]:
         """Ranked Sections for plain words. Raw query text never reaches FTS5."""
+        if areas:
+            self._check_areas(areas)
         words = re.findall(r"\w+", query)
         if not words:
             return []
@@ -118,3 +128,10 @@ class KnowledgeBase:
             SearchHit(locator, release, area, kind, title, heading_path, " ".join(snippet.split()))
             for locator, release, area, kind, title, heading_path, snippet in self._con.execute(sql, params)
         ]
+
+    def _check_areas(self, areas: list[str]) -> None:
+        for area in areas:
+            if area not in self.areas:
+                raise KnowledgeBaseError(
+                    f"Unknown Area '{area}' in Release {self.release}; available: {', '.join(self.areas)}"
+                )

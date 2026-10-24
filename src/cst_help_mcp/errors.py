@@ -14,4 +14,4 @@ class BuildError(CstHelpError):
 
 
 class KnowledgeBaseError(CstHelpError):
-    """The Knowledge Base is missing or doesn't hold the requested Release."""
+    """The Knowledge Base is missing or doesn't hold the requested Release or Area."""

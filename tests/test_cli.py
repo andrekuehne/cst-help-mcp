@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from kb_helpers import SOLVER_HF, write_config
@@ -99,3 +101,47 @@ def test_missing_knowledge_base_fails_clearly(tmp_path: Path, capsys: pytest.Cap
 
     assert code == 2
     assert "No Knowledge Base at" in capsys.readouterr().err
+
+
+def test_instructions_print_the_mcp_entry_and_an_agents_md_section(
+    vba_kb: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["instructions", "--kb", str(vba_kb)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    server = _printed_mcp_entry(out)["mcpServers"]["cst-help"]
+    assert Path(server["command"]).stem == "cst-help"
+    assert server["args"] == ["serve", "--kb", str(vba_kb.resolve())]
+    assert "## CST help" in out
+    assert "cst_help_lookup" in out
+    assert "not documented" in out
+
+
+def test_instructions_pin_a_chosen_release(vba_kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    main(["instructions", "--kb", str(vba_kb), "--release", "2024"])
+
+    server = _printed_mcp_entry(capsys.readouterr().out)["mcpServers"]["cst-help"]
+    assert server["args"][-2:] == ["--release", "2024"]
+
+
+def _printed_mcp_entry(out: str) -> Any:
+    """The JSON object in the printed instructions, which starts at the first brace."""
+    entry, _ = json.JSONDecoder().raw_decode(out, out.index("{"))
+    return entry
+
+
+def test_serving_a_release_the_knowledge_base_lacks_fails_clearly(
+    vba_kb: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["serve", "--kb", str(vba_kb), "--release", "2025"])
+
+    assert code == 2
+    assert "has no Release '2025'; available: 2024" in capsys.readouterr().err
+
+
+def test_lookup_in_an_unknown_area_fails_clearly(vba_kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["lookup", "Solver", "--kb", str(vba_kb), "--area", "vba-4d"])
+
+    assert code == 2
+    assert "Unknown Area 'vba-4d' in Release 2024; available: vba-3d" in capsys.readouterr().err
