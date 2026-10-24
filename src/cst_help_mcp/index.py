@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 from cst_help_mcp.model import Document
 
-INDEX_FILE = "index.sqlite"
-
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS collections (
     name TEXT PRIMARY KEY,
-    release TEXT NOT NULL
+    release TEXT NOT NULL,
+    build TEXT NOT NULL,
+    failed INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS api_entries (
     collection TEXT NOT NULL,
@@ -46,25 +47,32 @@ CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5 (
 """
 
 
-def connect(kb_path: Path) -> sqlite3.Connection:
-    con = sqlite3.connect(kb_path / INDEX_FILE)
-    con.executescript(_SCHEMA)
-    return con
+@dataclass(frozen=True)
+class IndexedBuild:
+    collection: str
+    release: str
+    build: str
+    failed: int
+    docs: Iterable[Document]
 
 
-def replace_collection(kb_path: Path, collection: str, release: str, docs: Iterable[Document]) -> None:
-    """Replace every index row of one Collection, in a single transaction."""
-    con = connect(kb_path)
+def open_read_only(db_path: Path) -> sqlite3.Connection:
+    return sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+
+
+def write_index(db_path: Path, builds: Iterable[IndexedBuild]) -> None:
+    """Write a new database holding the given Builds. Assembly never changes an existing one."""
+    con = sqlite3.connect(db_path)
     try:
         with con:
-            ids = [r[0] for r in con.execute("SELECT id FROM sections WHERE collection = ?", (collection,))]
-            con.executemany("DELETE FROM sections_fts WHERE rowid = ?", [(i,) for i in ids])
-            for table in ("sections", "api_entries", "collections"):
-                key = "name" if table == "collections" else "collection"
-                con.execute(f"DELETE FROM {table} WHERE {key} = ?", (collection,))
-            con.execute("INSERT INTO collections VALUES (?, ?)", (collection, release))
-            for doc in docs:
-                _insert(con, collection, doc)
+            con.executescript(_SCHEMA)
+            for build in builds:
+                con.execute(
+                    "INSERT INTO collections VALUES (?, ?, ?, ?)",
+                    (build.collection, build.release, build.build, build.failed),
+                )
+                for doc in build.docs:
+                    _insert(con, build.collection, doc)
     finally:
         con.close()
 

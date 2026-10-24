@@ -34,8 +34,22 @@ def server_instructions(kb: KnowledgeBase) -> str:
         f"{routing}\n\n"
         "If cst_help_lookup says an identifier is not documented and cst_help_search finds nothing "
         "either, tell the user so and do not invent the method, its arguments or its behaviour.\n\n"
+        f"{_incompleteness(kb)}"
         f"Every Locator is a path relative to the Knowledge Base folder {kb.path.resolve()}, "
         "so an agent with file access can open or grep the same Markdown there."
+    )
+
+
+def _incompleteness(kb: KnowledgeBase) -> str:
+    if not kb.incomplete:
+        return ""
+    lost = "; ".join(
+        f"{n} Document{'s' if n != 1 else ''} of Collection {c} failed to build"
+        for c, n in kb.incomplete.items()
+    )
+    return (
+        f"This Knowledge Base is incomplete: {lost}. A 'not documented' answer may come from a Document "
+        "that failed, so tell the user when you rely on one.\n\n"
     )
 
 

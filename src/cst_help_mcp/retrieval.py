@@ -11,8 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
 
+from cst_help_mcp import layout
 from cst_help_mcp.errors import KnowledgeBaseError
-from cst_help_mcp.index import INDEX_FILE
+from cst_help_mcp.index import open_read_only
 
 MAX_HITS = 10
 # VBA code calls the Application object's methods without an object; its help page is "Project Object".
@@ -47,6 +48,13 @@ class KnowledgeBase:
         self._con = con
         self.path = path
         self.release = release
+        # Collections of this Release whose active Build lost Documents, with how many it lost.
+        self.incomplete: dict[str, int] = dict(
+            con.execute(
+                "SELECT name, failed FROM collections WHERE release = ? AND failed > 0 ORDER BY name",
+                (release,),
+            ).fetchall()
+        )
         self.areas = [
             r[0]
             for r in con.execute(
@@ -56,10 +64,7 @@ class KnowledgeBase:
 
     @classmethod
     def open(cls, path: Path, release: str | None = None) -> KnowledgeBase:
-        db = path / INDEX_FILE
-        if not db.is_file():
-            raise KnowledgeBaseError(f"No Knowledge Base at {path}: {INDEX_FILE} is missing")
-        con = sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True)
+        con = _connect_active(path)
         releases = sorted(
             (r[0] for r in con.execute("SELECT DISTINCT release FROM collections")),
             key=lambda r: (len(r), r),
@@ -135,3 +140,16 @@ class KnowledgeBase:
                 raise KnowledgeBaseError(
                     f"Unknown Area '{area}' in Release {self.release}; available: {', '.join(self.areas)}"
                 )
+
+
+def _connect_active(path: Path) -> sqlite3.Connection:
+    """Open the active assembly's database, read-only, and keep it for the life of the connection."""
+    for _ in range(3):
+        db = layout.assemblies_dir(path) / layout.active_assembly(path) / layout.INDEX_FILE
+        try:
+            return open_read_only(db)
+        except sqlite3.OperationalError:
+            # An assembly may have switched the pointer and pruned this database in the meantime.
+            if db.is_file():
+                raise
+    raise KnowledgeBaseError(f"The Knowledge Base at {path} points at a missing database: {db}")

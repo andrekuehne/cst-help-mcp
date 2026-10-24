@@ -38,7 +38,18 @@ def _parser() -> argparse.ArgumentParser:
     build = commands.add_parser("build", help="build one Collection into the Knowledge Base")
     build.add_argument("collection")
     build.add_argument("--config", type=Path, default=Path(DEFAULT_CONFIG))
+    build.add_argument("--strict", action="store_true", help="fail the build if any Document fails")
     build.set_defaults(run=_build)
+
+    assemble = commands.add_parser(
+        "assemble", help="assemble the newest Build of every Collection into the Knowledge Base"
+    )
+    assemble.add_argument("--kb", type=Path, required=True, help="the Knowledge Base folder")
+    assemble.set_defaults(run=_assemble)
+
+    validate = commands.add_parser("validate", help="check the integrity of a Knowledge Base")
+    validate.add_argument("--kb", type=Path, required=True, help="the Knowledge Base folder")
+    validate.set_defaults(run=_validate)
 
     lookup = commands.add_parser("lookup", help="look up an API Entry by name, such as Solver.FrequencyRange")
     lookup.add_argument("name")
@@ -75,9 +86,53 @@ def _add_kb_arguments(parser: argparse.ArgumentParser) -> None:
 def _build(args: argparse.Namespace) -> int:
     from cst_help_mcp.build import build_collection
 
-    docs = build_collection(args.config, args.collection)
-    entries = sum(len(d.api_entries) for d in docs)
-    print(f"Built {args.collection}: {len(docs)} Documents, {entries} API Entries")
+    result = build_collection(args.config, args.collection, strict=args.strict)
+    report = result.report
+    print(
+        f"Built {args.collection}: {report.converted} Documents, {report.api_entries} API Entries"
+        f" (Build {result.build_id})"
+    )
+    print(
+        f"  Documents: discovered {report.discovered}, converted {report.converted},"
+        f" skipped {report.skipped}, failed {report.failed}"
+    )
+    print(
+        f"  unresolved links {_count(report.unresolved_links)}, missing Assets {_count(report.missing_assets)},"
+        f" unsupported items {sum(report.unsupported.values())}"
+    )
+    for failure in report.failures:
+        print(f"  failed: {failure.source}: {failure.error}")
+    if not report.complete:
+        print(f"The Knowledge Base is incomplete; see {result.report_path}, or rebuild with --strict.")
+    return 0
+
+
+def _count(n: int | None) -> str:
+    return "not checked yet" if n is None else str(n)
+
+
+def _assemble(args: argparse.Namespace) -> int:
+    from cst_help_mcp.assembly import assemble
+
+    assembly = assemble(args.kb)
+    for collection, build in assembly.builds.items():
+        print(f"Assembled {collection} (Build {build})")
+    return 0
+
+
+def _validate(args: argparse.Namespace) -> int:
+    from cst_help_mcp.validate import validate
+
+    result = validate(args.kb)
+    for problem in result.problems:
+        print(f"problem: {problem}")
+    if result.problems:
+        print(f"The Knowledge Base at {args.kb} is not valid: {len(result.problems)} problems")
+        return 1
+    print(f"The Knowledge Base at {args.kb} is valid")
+    for c in result.collections:
+        state = "complete" if not c.failed else f"incomplete, {c.failed} failed"
+        print(f"  {c.name}: Build {c.build}, {c.documents} Documents, {state}")
     return 0
 
 
