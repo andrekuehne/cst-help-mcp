@@ -7,6 +7,8 @@ from pathlib import Path
 
 from kb_helpers import SOLVER_HF
 
+VBA_OVERVIEW = "vba/vba_macro_language_overview.htm.md"
+
 from cst_help_mcp.retrieval import KnowledgeBase
 
 
@@ -162,3 +164,14 @@ def test_application_object_methods_resolve_under_application_too(kb: KnowledgeB
     hits = kb.lookup("Application.AddToHistory")
 
     assert [h.qualified_name for h in hits] == ["Project.AddToHistory"]
+
+
+def test_the_root_vba_overview_belongs_to_the_vba_3d_area(vba_kb: Path, kb: KnowledgeBase) -> None:
+    md = (vba_kb / "cst-2024" / VBA_OVERVIEW).read_text(encoding="utf-8")
+
+    assert md.startswith(
+        '---\nrelease: "2024"\narea: "vba-3d"\ntitle: "VBA Overview"\n'
+        'source: "Online Help/vba/vba_macro_language_overview.htm"\n'
+    )
+    hits = kb.search("macro editor debugger OLE automation", areas=["vba-3d"])
+    assert VBA_OVERVIEW in [h.locator.partition("#")[0] for h in hits[:3]]

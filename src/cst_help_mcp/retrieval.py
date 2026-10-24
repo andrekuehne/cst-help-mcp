@@ -58,7 +58,9 @@ class KnowledgeBase:
         self.areas = [
             r[0]
             for r in con.execute(
-                "SELECT DISTINCT area FROM sections WHERE release = ? ORDER BY area", (release,)
+                "SELECT DISTINCT a.area FROM section_areas a JOIN sections s ON s.id = a.section"
+                " WHERE s.release = ? ORDER BY a.area",
+                (release,),
             )
         ]
 
@@ -125,7 +127,7 @@ class KnowledgeBase:
         )
         params: list[str | int] = [match, self.release]
         if areas:
-            sql += f" AND s.area IN ({', '.join('?' * len(areas))})"
+            sql += f" AND s.id IN (SELECT section FROM section_areas WHERE area IN ({', '.join('?' * len(areas))}))"
             params.extend(areas)
         sql += " ORDER BY bm25(sections_fts, 10.0, 5.0, 1.0) LIMIT ?"
         params.append(max(1, min(limit, MAX_HITS)))

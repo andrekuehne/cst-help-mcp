@@ -111,7 +111,8 @@ def read_topic(
     title = _text(soup.title) if soup.title else source_path.rsplit("/", 1)[-1]
     builder = _DocumentBuilder(title, profile, source_path)
     body = soup.body or soup
-    for element in _content_elements(body):
+    content = _content_elements(body)
+    for element in content:
         builder.add(element)
     builder.finish()
     return Document(
@@ -124,6 +125,7 @@ def read_topic(
         sections=[s for s in builder.sections if s.blocks],
         api_entries=builder.entries,
         links=builder.links,
+        source_anchors=_source_anchors(content),
     )
 
 
@@ -143,6 +145,12 @@ def _content_elements(body: Tag) -> list[Tag]:
             continue
         content.append(child)
     return content
+
+
+def _source_anchors(content: list[Tag]) -> list[str]:
+    """Every id and name attribute in the content, which a link fragment may target."""
+    tags = [tag for element in content for tag in (element, *element.find_all(True))]
+    return sorted({str(tag[a]) for tag in tags for a in ("id", "name") if tag.get(a)})
 
 
 def _text(element: PageElement | None, link: Callable[[Tag], int | None] | None = None) -> str:

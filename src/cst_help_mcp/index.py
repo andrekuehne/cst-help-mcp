@@ -41,6 +41,12 @@ CREATE TABLE IF NOT EXISTS sections (
     title TEXT NOT NULL,
     heading_path TEXT NOT NULL
 );
+-- Every Area a Section is found under: its Document's own, and those of its Aliases.
+CREATE TABLE IF NOT EXISTS section_areas (
+    section INTEGER NOT NULL,
+    area TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS section_areas_area ON section_areas (area, section);
 CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5 (
     title, headings, body, tokenize = 'unicode61'
 );
@@ -115,4 +121,8 @@ def _insert(con: sqlite3.Connection, collection: str, doc: Document) -> None:
         con.execute(
             "INSERT INTO sections_fts (rowid, title, headings, body) VALUES (?, ?, ?, ?)",
             (cur.lastrowid, doc.title, headings, body),
+        )
+        con.executemany(
+            "INSERT INTO section_areas VALUES (?, ?)",
+            [(cur.lastrowid, area) for area in (doc.area, *doc.alias_areas)],
         )

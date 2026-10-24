@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from kb_helpers import PROJECTS, VBA_3D, ProseBuild, write_config
+from kb_helpers import PROJECTS, VBA_3D, VBA_OVERVIEW, ProseBuild, write_config
 
 from cst_help_mcp.build import build_collection
 from cst_help_mcp.retrieval import KnowledgeBase
@@ -124,7 +124,7 @@ def vba_kb(corpus_2024: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
         root / "cst-help.toml",
         root / "kb",
         corpus_2024,
-        ["Online Help/mergedProjects/VBA_3D/*"],
+        ["Online Help/mergedProjects/VBA_3D/*", "Online Help/vba/*"],
     )
     build_collection(config, "cst-2024")
     return root / "kb"
@@ -140,8 +140,11 @@ def kb(vba_kb: Path) -> Iterator[KnowledgeBase]:
 def prose_build(corpus_2024: Path, tmp_path_factory: pytest.TempPathFactory) -> ProseBuild:
     """The 3D Simulation and General Areas, built once per test session in a temporary folder."""
     root = tmp_path_factory.mktemp("prose-kb")
-    projects = [p for p in PROJECTS if p != VBA_3D]
-    config = write_config(root / "cst-help.toml", root / "kb", corpus_2024, [f"{p}/*" for p in projects])
+    projects = [p for p in PROJECTS if p not in (VBA_3D, VBA_OVERVIEW)]
+    include = [f"{p}/*" for p in projects] + [
+        f"Online Help/{name}" for name in ("menu.htm", "user_scipts.htm")
+    ]
+    config = write_config(root / "cst-help.toml", root / "kb", corpus_2024, include)
     result = build_collection(config, "cst-2024")
     report = json.loads(result.report_path.read_text(encoding="utf-8"))
     return ProseBuild(root / "kb", root / "kb" / "cst-2024", report)

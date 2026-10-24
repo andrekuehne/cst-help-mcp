@@ -176,13 +176,13 @@ A Python tool, `cst-help-mcp` with the CLI `cst-help`, that builds a private, po
 
   | Area | Contents |
   |---|---|
-  | `general` | General features, user interface, ribbons, advanced, license, simulation acceleration |
+  | `general` | General features, user interface, ribbons, advanced, license, simulation acceleration, and the Python menu topics at the help root |
   | `3d` | 3D Simulation |
   | `circuits` | DES |
   | `pcb` | PCB |
   | `filter-designer` | Filter Designer 3D |
   | `chip-interface` | CHI |
-  | `vba-3d` | VBA for the 3D modeler |
+  | `vba-3d` | VBA for the 3D modeler, and the root project's VBA overview |
   | `vba-schematic` | VBA_DES |
   | `winwrap-basic` | WinWrap Basic language reference |
   | `python` | Python reference |
@@ -239,6 +239,10 @@ A Python tool, `cst-help-mcp` with the CLI `cst-help`, that builds a private, po
 
 - **Two passes:** first an inventory of every Document, anchor and Alias, then link resolution.
 - **Link status:** each link is resolved, unresolved, external, or outside the corpus, and the report lists every unresolved one.
+  - **Outside** means the target file exists in the release folder but is no Document of the Build, such as a project not read or filtered out, a PDF, or an image. The report counts outside links by the project or file type they lead to.
+  - **Unresolved** means the target exists nowhere in the release folder, as with links to `Videos/` and `Licenses/` folders a release folder may lack. Unresolved links never fail a build.
+  - A resolved link whose fragment the target's source names nowhere is reported as a missing anchor.
+- **Aliases and Areas:** a Document keeps the Area of the copy that is kept, but a search narrowed to an Alias's Area finds it too.
 - **Assets:** deduplicated by content hash. BMP and SVG become PNG at build time, along with derived images scaled for clients.
 - **Image metadata:** each Asset carries its caption or alt text, dimensions, kind (figure, icon, equation image) and the Documents that reference it.
 

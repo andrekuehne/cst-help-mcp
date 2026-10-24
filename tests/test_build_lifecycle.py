@@ -82,6 +82,7 @@ def test_the_build_report_counts_documents_and_lists_failures(tmp_path: Path) ->
         "aliases": 0,
         "failed": 1,
         "unresolved_links": 0,
+        "missing_anchors": 0,
         "missing_assets": None,
         "unsupported": 1,
     }
@@ -133,7 +134,7 @@ def test_the_cli_prints_a_summary_of_the_report(tmp_path: Path, capsys: pytest.C
     out = capsys.readouterr().out
     assert code == 0
     assert "discovered 4, converted 2, skipped 1, failed 1" in out
-    assert "unresolved links 0, missing Assets not checked yet, unsupported items 1" in out
+    assert "unresolved links 0, missing anchors 0, missing Assets not checked yet, unsupported items 1" in out
     assert f"failed: {BROKEN}" in out.replace("Online Help/mergedProjects/VBA_3D/", "")
     assert "incomplete" in out
 

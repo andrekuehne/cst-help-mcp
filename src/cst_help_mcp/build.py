@@ -15,7 +15,7 @@ from cst_help_mcp import layout
 from cst_help_mcp.assembly import assemble
 from cst_help_mcp.config import CollectionConfig, SourceConfig, load_config
 from cst_help_mcp.errors import BuildError
-from cst_help_mcp.links import UnresolvedLink, resolve_links, unresolved_links
+from cst_help_mcp.links import LinkReport, resolve_links
 from cst_help_mcp.locator import locator_for
 from cst_help_mcp.model import Document, LinkStatus
 from cst_help_mcp.render import render_markdown
@@ -27,11 +27,21 @@ class _Project:
     area: str
     folder: str  # relative to the release folder
     profile: Profile
+    # When set, only these files directly in the folder are read, all as topics: they are
+    # topics that don't load whtopic.js, among WebHelp's shell pages.
+    topics: tuple[str, ...] = ()
+
+    def files(self, release: Path) -> list[Path]:
+        folder = release / self.folder
+        if self.topics:
+            return [folder / name for name in self.topics if (folder / name).is_file()]
+        return sorted(p for p in folder.rglob("*") if p.is_file())
 
 
 # The help projects that the cst-release Source can read so far. The root project's own
-# subtrees make up the General Area. A topic published identically in several projects
-# becomes a Document of the first one listed here, so the ribbon topics belong to General.
+# subtrees make up the General Area, except its VBA overview, which macro questions need in
+# VBA 3D. A topic published identically in several projects becomes a Document of the first
+# one listed here, so the ribbon topics belong to General.
 _CST_RELEASE_PROJECTS = (
     *(
         _Project("general", f"Online Help/{folder}", PROSE)
@@ -44,7 +54,10 @@ _CST_RELEASE_PROJECTS = (
             "simulation_acceleration",
         )
     ),
+    # The Python menu topics (CST Apps and user scripts) at the root of the help.
+    _Project("general", "Online Help", PROSE, topics=("menu.htm", "user_scipts.htm")),
     _Project("3d", "Online Help/mergedProjects/3D", PROSE),
+    _Project("vba-3d", "Online Help/vba", PROSE),
     _Project("vba-3d", "Online Help/mergedProjects/VBA_3D", VBA),
 )
 
@@ -66,8 +79,7 @@ class BuildReport:
     # None until ticket 09 checks them.
     missing_assets: int | None = None
     failures: list[Failure] = field(default_factory=list)
-    links: Counter[LinkStatus] = field(default_factory=Counter)
-    unresolved: list[UnresolvedLink] = field(default_factory=list)
+    links: LinkReport = field(default_factory=LinkReport)
     unsupported: Counter[str] = field(default_factory=Counter)  # files no reader handles, by extension
     api_entries: int = 0
 
@@ -81,7 +93,11 @@ class BuildReport:
 
     @property
     def unresolved_links(self) -> int:
-        return len(self.unresolved)
+        return len(self.links.unresolved)
+
+    @property
+    def missing_anchors(self) -> int:
+        return len(self.links.missing_anchors)
 
     @property
     def complete(self) -> bool:
@@ -97,12 +113,15 @@ class BuildReport:
                 "aliases": self.aliases,
                 "failed": self.failed,
                 "unresolved_links": self.unresolved_links,
+                "missing_anchors": self.missing_anchors,
                 "missing_assets": self.missing_assets,
                 "unsupported": sum(self.unsupported.values()),
             },
             "api_entries": self.api_entries,
-            "links": {status: self.links[status] for status in get_args(LinkStatus)},
-            "unresolved_links": [asdict(u) for u in self.unresolved],
+            "links": {status: self.links.statuses[status] for status in get_args(LinkStatus)},
+            "outside_links": dict(self.links.outside.most_common()),
+            "unresolved_links": [asdict(u) for u in self.links.unresolved],
+            "missing_anchors": [asdict(u) for u in self.links.missing_anchors],
             "failures": [asdict(f) for f in self.failures],
             "unsupported": dict(sorted(self.unsupported.items())),
         }
@@ -136,7 +155,6 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
         raise BuildError(f"{report.failed} Documents failed to build, and --strict is set: {_listed(report)}")
     report.api_entries = sum(len(d.api_entries) for d in docs)
     report.links = resolve_links(docs, [source.path for source in collection.sources])
-    report.unresolved = unresolved_links(docs)
     build_id = layout.new_id()
     final = layout.build_dir(config.kb_path, collection.name, build_id)
     with layout.staged(final) as staging:
@@ -174,7 +192,7 @@ def _read_source(
                 f"The structure of {source.path} is not recognised as a CST release folder: "
                 f"it has no '{project.folder}' project"
             )
-        for file in sorted(p for p in folder.rglob("*") if p.is_file()):
+        for file in project.files(source.path):
             rel = file.relative_to(source.path).as_posix()
             if not _selected(rel, source):
                 continue
@@ -184,7 +202,7 @@ def _read_source(
             report.discovered += 1
             try:
                 html = file.read_text(encoding="utf-8")
-                if not is_topic(html):
+                if not (project.topics or is_topic(html)):
                     report.skipped += 1
                     continue
                 found = True
@@ -240,6 +258,8 @@ def _merge_aliases(docs: list[Document]) -> list[Document]:
         first = kept.setdefault(hashlib.sha256(content.encode()).hexdigest(), doc)
         if first is not doc:
             first.aliases.append(doc.source_path)
+            if doc.area != first.area and doc.area not in first.alias_areas:
+                first.alias_areas.append(doc.area)
     return list(kept.values())
 
 

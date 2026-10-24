@@ -18,6 +18,8 @@ def render_markdown(doc: Document) -> str:
     }
     if doc.aliases:
         front["aliases"] = doc.aliases
+    if doc.alias_areas:
+        front["alias_areas"] = doc.alias_areas
     lines = ["---", *(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in front.items()), "---", ""]
     for section in doc.sections:
         lines.extend(f'<a id="{anchor}"></a>' for anchor in section.anchors)

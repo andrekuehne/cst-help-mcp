@@ -176,3 +176,59 @@ def test_the_report_counts_links_by_status_and_lists_the_unresolved_ones(prose_b
         "href": "Online Help/mergedProjects/3D/cbls/creating_harness/+Selected_Segments",
     } in report["unresolved_links"]
     assert report["counts"]["unresolved_links"] == len(report["unresolved_links"]) < 20
+
+
+def test_the_python_menu_topics_at_the_help_root_belong_to_general(prose_kb: KnowledgeBase) -> None:
+    # Neither loads whtopic.js, which marks the other topics.
+    apps = prose_kb.search("CST Apps python wheel repo", areas=["general"])
+    scripts = prose_kb.search("user scripts library directories update", areas=["general"])
+
+    assert apps[0].locator == "menu.htm.md"
+    assert scripts[0].locator == "user_scipts.htm.md"
+
+
+def test_a_search_narrowed_to_an_alias_area_finds_the_document(
+    prose_build: ProseBuild, prose_kb: KnowledgeBase
+) -> None:
+    # The Modeling ribbon topic is a General Document, also published in the 3D project.
+    assert 'alias_areas: ["3d"]\n' in _md(prose_build, MODELING_RIBBON)
+    hits = [
+        h for h in prose_kb.search("modeling ribbon", areas=["3d"]) if h.locator.startswith(MODELING_RIBBON)
+    ]
+
+    assert hits
+    assert {h.area for h in hits} == {"general"}
+
+
+def test_links_to_files_missing_from_the_release_folder_are_unresolved_but_do_not_fail_the_build(
+    prose_build: ProseBuild,
+) -> None:
+    report = prose_build.report
+
+    # This release folder ships no Videos/ folder.
+    assert {
+        "source": "Online Help/general/getting_started_videos.htm",
+        "href": "Videos/Quick_Intro_Video/QS_V3.html",
+    } in report["unresolved_links"]
+    assert report["complete"] is True
+
+
+def test_outside_links_are_counted_by_where_they_lead(prose_build: ProseBuild) -> None:
+    outside = prose_build.report["outside_links"]
+
+    # A project this build does not read, and the manuals in Documentation/.
+    assert outside["Online Help/mergedProjects/DES"] > 0
+    assert outside[".pdf"] >= 9
+    assert "Online Help/mergedProjects/3D" not in outside
+    assert sum(outside.values()) == prose_build.report["links"]["outside"]
+
+
+def test_fragments_that_match_no_anchor_are_listed(prose_build: ProseBuild) -> None:
+    report = prose_build.report
+
+    # The target names its Section "Mesh_Control_Items".
+    assert {
+        "source": "Online Help/mergedProjects/3D/common_modi/common_modi_meshmode.htm",
+        "href": "Online Help/mergedProjects/3D/common_overview/common_overview_mesh.htm#Mesh_Control_Regions",
+    } in report["missing_anchors"]
+    assert report["counts"]["missing_anchors"] == len(report["missing_anchors"])

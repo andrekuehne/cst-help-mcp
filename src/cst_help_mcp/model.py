@@ -112,6 +112,10 @@ class Document:
     api_entries: list[ApiEntry] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
     aliases: list[str] = field(default_factory=list)  # other source paths of the same Document
+    # The Areas of Aliases published in other projects; searches narrowed to them find the Document.
+    alias_areas: list[str] = field(default_factory=list)
+    # Every id and name the source declares, so link fragments are checked beyond Section anchors.
+    source_anchors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

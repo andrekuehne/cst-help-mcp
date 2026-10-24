@@ -97,7 +97,8 @@ def _build(args: argparse.Namespace) -> int:
         f" skipped {report.skipped}, failed {report.failed}; {report.aliases} were Aliases"
     )
     print(
-        f"  unresolved links {_count(report.unresolved_links)}, missing Assets {_count(report.missing_assets)},"
+        f"  unresolved links {report.unresolved_links}, missing anchors {report.missing_anchors},"
+        f" missing Assets {_count(report.missing_assets)},"
         f" unsupported items {sum(report.unsupported.values())}"
     )
     for failure in report.failures:
