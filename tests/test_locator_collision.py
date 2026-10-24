@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from kb_helpers import write_config
+from kb_helpers import write_config, write_release
 
 from cst_help_mcp.build import build_collection
 from cst_help_mcp.errors import BuildError
@@ -22,10 +22,9 @@ TOPIC = """<?xml version="1.0" encoding="utf-8"?>
 
 
 def test_two_sources_with_the_same_locator_stop_the_build(tmp_path: Path) -> None:
-    project = tmp_path / "release" / "Online Help" / "mergedProjects" / "VBA_3D" / "widgets"
-    project.mkdir(parents=True)
-    (project / "Widget Object.htm").write_text(TOPIC, encoding="utf-8")
-    (project / "widget-object.htm").write_text(TOPIC, encoding="utf-8")
+    write_release(
+        tmp_path / "release", {"widgets/Widget Object.htm": TOPIC, "widgets/widget-object.htm": TOPIC}
+    )
     config = write_config(tmp_path / "cst-help.toml", tmp_path / "kb", tmp_path / "release", [])
 
     with pytest.raises(BuildError) as error:

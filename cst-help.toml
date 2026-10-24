@@ -1,6 +1,6 @@
-# Development configuration: `uv run cst-help build cst-2024` builds the VBA 3D Area
-# from the corpus in .ingestion/2024 into the gitignored .kb folder.
-# Relative paths resolve against this file's folder.
+# Development configuration: `uv run cst-help build cst-2024` builds every Area the
+# cst-release Source reads so far from the corpus in .ingestion/2024 into the gitignored
+# .kb folder. Relative paths resolve against this file's folder.
 
 [knowledge_base]
 path = '.kb'
@@ -11,4 +11,3 @@ release = "2024"
 [[collections.cst-2024.sources]]
 type = "cst-release"
 path = '.ingestion/2024'
-include = ["Online Help/mergedProjects/VBA_3D/*"]

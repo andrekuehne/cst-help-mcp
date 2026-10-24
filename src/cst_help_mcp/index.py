@@ -97,7 +97,7 @@ def _insert(con: sqlite3.Connection, collection: str, doc: Document) -> None:
         )
     for section in doc.sections:
         locator = f"{doc.locator}#{section.anchor}" if section.anchor else doc.locator
-        headings = " ".join(b.text for b in section.blocks if b.kind == "heading")
+        headings = " ".join(b.plain_text() for b in section.blocks if b.kind == "heading")
         body = "\n".join(b.plain_text() for b in section.blocks if b.kind != "heading")
         cur = con.execute(
             "INSERT INTO sections (collection, release, area, kind, locator, title, heading_path)"

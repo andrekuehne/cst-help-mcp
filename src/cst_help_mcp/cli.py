@@ -89,12 +89,12 @@ def _build(args: argparse.Namespace) -> int:
     result = build_collection(args.config, args.collection, strict=args.strict)
     report = result.report
     print(
-        f"Built {args.collection}: {report.converted} Documents, {report.api_entries} API Entries"
-        f" (Build {result.build_id})"
+        f"Built {args.collection}: {report.documents} Documents,"
+        f" {report.api_entries} API Entries (Build {result.build_id})"
     )
     print(
         f"  Documents: discovered {report.discovered}, converted {report.converted},"
-        f" skipped {report.skipped}, failed {report.failed}"
+        f" skipped {report.skipped}, failed {report.failed}; {report.aliases} were Aliases"
     )
     print(
         f"  unresolved links {_count(report.unresolved_links)}, missing Assets {_count(report.missing_assets)},"

@@ -3,24 +3,50 @@
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import json
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 from cst_help_mcp import layout
 from cst_help_mcp.assembly import assemble
 from cst_help_mcp.config import CollectionConfig, SourceConfig, load_config
 from cst_help_mcp.errors import BuildError
+from cst_help_mcp.links import UnresolvedLink, resolve_links, unresolved_links
 from cst_help_mcp.locator import locator_for
-from cst_help_mcp.model import Document
+from cst_help_mcp.model import Document, LinkStatus
 from cst_help_mcp.render import render_markdown
-from cst_help_mcp.robohelp import is_topic, read_vba_topic
+from cst_help_mcp.robohelp import PROSE, VBA, Profile, is_topic, read_topic
 
-# Release-folder projects that the cst-release Source can read so far, by Area.
-_CST_RELEASE_AREAS = {"vba-3d": "Online Help/mergedProjects/VBA_3D"}
+
+@dataclass(frozen=True)
+class _Project:
+    area: str
+    folder: str  # relative to the release folder
+    profile: Profile
+
+
+# The help projects that the cst-release Source can read so far. The root project's own
+# subtrees make up the General Area. A topic published identically in several projects
+# becomes a Document of the first one listed here, so the ribbon topics belong to General.
+_CST_RELEASE_PROJECTS = (
+    *(
+        _Project("general", f"Online Help/{folder}", PROSE)
+        for folder in (
+            "general",
+            "userinterface",
+            "ribbons",
+            "advanced",
+            "license",
+            "simulation_acceleration",
+        )
+    ),
+    _Project("3d", "Online Help/mergedProjects/3D", PROSE),
+    _Project("vba-3d", "Online Help/mergedProjects/VBA_3D", VBA),
+)
 
 
 @dataclass(frozen=True)
@@ -36,16 +62,26 @@ class BuildReport:
     discovered: int = 0
     converted: int = 0
     skipped: int = 0
-    # None until a later ticket checks them: links (ticket 04) and Assets (ticket 09).
-    unresolved_links: int | None = None
+    aliases: int = 0  # converted topics that became Aliases of another Document
+    # None until ticket 09 checks them.
     missing_assets: int | None = None
     failures: list[Failure] = field(default_factory=list)
+    links: Counter[LinkStatus] = field(default_factory=Counter)
+    unresolved: list[UnresolvedLink] = field(default_factory=list)
     unsupported: Counter[str] = field(default_factory=Counter)  # files no reader handles, by extension
     api_entries: int = 0
 
     @property
     def failed(self) -> int:
         return len(self.failures)
+
+    @property
+    def documents(self) -> int:
+        return self.converted - self.aliases
+
+    @property
+    def unresolved_links(self) -> int:
+        return len(self.unresolved)
 
     @property
     def complete(self) -> bool:
@@ -58,12 +94,15 @@ class BuildReport:
                 "discovered": self.discovered,
                 "converted": self.converted,
                 "skipped": self.skipped,
+                "aliases": self.aliases,
                 "failed": self.failed,
                 "unresolved_links": self.unresolved_links,
                 "missing_assets": self.missing_assets,
                 "unsupported": sum(self.unsupported.values()),
             },
             "api_entries": self.api_entries,
+            "links": {status: self.links[status] for status in get_args(LinkStatus)},
+            "unresolved_links": [asdict(u) for u in self.unresolved],
             "failures": [asdict(f) for f in self.failures],
             "unsupported": dict(sorted(self.unsupported.items())),
         }
@@ -87,6 +126,8 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
     report = BuildReport()
     docs = [doc for source in collection.sources for doc in _read_source(collection, source, report)]
     _check_locators(docs)
+    docs = _merge_aliases(docs)
+    report.aliases = report.converted - len(docs)
     if not docs:
         raise BuildError(
             f"No Documents could be converted for collection '{collection.name}': {_listed(report)}"
@@ -94,6 +135,8 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
     if strict and report.failures:
         raise BuildError(f"{report.failed} Documents failed to build, and --strict is set: {_listed(report)}")
     report.api_entries = sum(len(d.api_entries) for d in docs)
+    report.links = resolve_links(docs, [source.path for source in collection.sources])
+    report.unresolved = unresolved_links(docs)
     build_id = layout.new_id()
     final = layout.build_dir(config.kb_path, collection.name, build_id)
     with layout.staged(final) as staging:
@@ -124,13 +167,14 @@ def _read_source(
     if not (source.path / "Online Help").is_dir():
         raise BuildError(f"{source.path} is not a CST release folder: it has no 'Online Help' folder")
     found = False
-    for area, project in _CST_RELEASE_AREAS.items():
-        if not (source.path / project).is_dir():
+    for project in _CST_RELEASE_PROJECTS:
+        folder = source.path / project.folder
+        if not folder.is_dir():
             raise BuildError(
                 f"The structure of {source.path} is not recognised as a CST release folder: "
-                f"it has no '{project}' project"
+                f"it has no '{project.folder}' project"
             )
-        for file in sorted(p for p in (source.path / project).rglob("*") if p.is_file()):
+        for file in sorted(p for p in folder.rglob("*") if p.is_file()):
             rel = file.relative_to(source.path).as_posix()
             if not _selected(rel, source):
                 continue
@@ -144,11 +188,12 @@ def _read_source(
                     report.skipped += 1
                     continue
                 found = True
-                doc = read_vba_topic(
+                doc = read_topic(
                     html,
+                    profile=project.profile,
                     source_path=rel,
                     locator=locator_for(rel),
-                    area=area,
+                    area=project.area,
                     release=collection.release,
                 )
             except Exception as e:  # noqa: BLE001
@@ -180,6 +225,22 @@ def _check_locators(docs: list[Document]) -> None:
             raise BuildError(
                 f"Locator collision: '{other}' and '{doc.source_path}' both map to '{doc.locator}'"
             )
+
+
+def _merge_aliases(docs: list[Document]) -> list[Document]:
+    """Keep one Document per identical title and text; the others' source paths become its Aliases.
+
+    Text, not structure, is compared, because projects with different Profiles parse the same
+    page differently. The first Document read wins, so the project order decides which is kept.
+    """
+    kept: dict[str, Document] = {}
+    for doc in docs:
+        text = " ".join(b.plain_text() for s in doc.sections for b in s.blocks)
+        content = f"{doc.title}\n{' '.join(text.split())}"
+        first = kept.setdefault(hashlib.sha256(content.encode()).hexdigest(), doc)
+        if first is not doc:
+            first.aliases.append(doc.source_path)
+    return list(kept.values())
 
 
 def _write_tree(tree: Path, docs: list[Document]) -> None:

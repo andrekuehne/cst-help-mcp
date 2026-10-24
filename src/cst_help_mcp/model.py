@@ -7,10 +7,51 @@ are rendered from it, never from raw source markup.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-BlockKind = Literal["heading", "paragraph", "list", "code", "table", "api_signature"]
+BlockKind = Literal["heading", "paragraph", "note", "list", "field", "code", "table", "api_signature"]
+LinkStatus = Literal["unresolved", "resolved", "external", "outside"]
+
+# A link's span in a block's text: ``[label](@N)``, N indexing Document.links. The label is
+# Markdown-escaped, so the text stays valid Markdown and the target can change without re-parsing.
+_LINK_SPAN = re.compile(r"\[((?:\\.|[^\\\]])*)\]\(@(\d+)\)")
+_ESCAPED = re.compile(r"\\(.)")
+_LABEL_SPECIALS = re.compile(r"([\\\[\]])")
+
+
+@dataclass
+class Link:
+    """A link as written in the source, and where it leads once the build has resolved it.
+
+    ``href`` is a URL, or a path relative to the release folder with an optional ``#fragment``.
+    ``target`` is the Locator it resolved to, with an anchor where the fragment matched one.
+    """
+
+    href: str
+    status: LinkStatus = "unresolved"
+    target: str = ""
+
+
+def escape_label(label: str) -> str:
+    """A link label escaped for Markdown."""
+    return _LABEL_SPECIALS.sub(r"\\\1", label)
+
+
+def link_span(label: str, index: int) -> str:
+    return f"[{escape_label(label)}](@{index})"
+
+
+def replace_links(text: str, replace: Callable[[str, int], str]) -> str:
+    """Replace each link span by ``replace(label, index)``; the label is unescaped."""
+    return _LINK_SPAN.sub(lambda m: replace(_ESCAPED.sub(r"\1", m[1]), int(m[2])), text)
+
+
+def plain(text: str) -> str:
+    """Text with its link spans reduced to their labels."""
+    return replace_links(text, lambda label, _: label)
 
 
 @dataclass
@@ -20,15 +61,20 @@ class Block:
     level: int = 0
     items: list[str] = field(default_factory=list)
     rows: list[list[str]] = field(default_factory=list)
+    # Each table cell's [rowspan, colspan], only for a table with merged cells.
+    spans: list[list[list[int]]] = field(default_factory=list)
     language: str = ""
+    term: str = ""  # a field definition's field name; its description is the text
 
     def plain_text(self) -> str:
         """The block's text without markup, for indexing."""
         if self.kind == "list":
-            return "\n".join(self.items)
+            return "\n".join(plain(item) for item in self.items)
         if self.kind == "table":
-            return "\n".join(" ".join(row) for row in self.rows)
-        return self.text
+            return "\n".join(" ".join(plain(cell) for cell in row) for row in self.rows)
+        if self.kind == "field":
+            return f"{self.term}\n{plain(self.text)}".strip()
+        return plain(self.text)
 
 
 @dataclass
@@ -64,6 +110,8 @@ class Document:
     title: str
     sections: list[Section] = field(default_factory=list)
     api_entries: list[ApiEntry] = field(default_factory=list)
+    links: list[Link] = field(default_factory=list)
+    aliases: list[str] = field(default_factory=list)  # other source paths of the same Document
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -79,5 +127,6 @@ class Document:
             for s in data["sections"]
         ]
         entries = [ApiEntry(**e) for e in data["api_entries"]]
-        fields = {k: v for k, v in data.items() if k not in ("sections", "api_entries")}
-        return cls(**fields, sections=sections, api_entries=entries)
+        links = [Link(**link) for link in data["links"]]
+        fields = {k: v for k, v in data.items() if k not in ("sections", "api_entries", "links")}
+        return cls(**fields, sections=sections, api_entries=entries, links=links)

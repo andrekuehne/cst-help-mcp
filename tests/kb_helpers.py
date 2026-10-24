@@ -3,10 +3,32 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 SOLVER_HF = "vba_3d/special_vbasolver/special_vbasolver_solver_object.htm.md"
 VBA_3D = "Online Help/mergedProjects/VBA_3D"
+# The help projects a cst-release Source expects in a release folder.
+PROJECTS = (
+    VBA_3D,
+    "Online Help/mergedProjects/3D",
+    "Online Help/general",
+    "Online Help/userinterface",
+    "Online Help/ribbons",
+    "Online Help/advanced",
+    "Online Help/license",
+    "Online Help/simulation_acceleration",
+)
+
+
+@dataclass(frozen=True)
+class ProseBuild:
+    """A Knowledge Base holding the 3D Simulation and General Areas, with its build report."""
+
+    kb: Path
+    tree: Path  # the Collection's readable view
+    report: dict[str, Any]
 
 
 def topic(obj: str, member: str, description: str) -> str:
@@ -23,8 +45,12 @@ def topic(obj: str, member: str, description: str) -> str:
 
 
 def write_release(folder: Path, files: dict[str, str | bytes]) -> Path:
-    """A synthetic release folder holding the given files, by path relative to the VBA 3D project."""
-    (folder / VBA_3D).mkdir(parents=True, exist_ok=True)
+    """A synthetic release folder holding the given files, by path relative to the VBA 3D project.
+
+    The other projects the cst-release Source expects are created empty.
+    """
+    for expected in PROJECTS:
+        (folder / expected).mkdir(parents=True, exist_ok=True)
     for rel, content in files.items():
         file = folder / VBA_3D / rel
         file.parent.mkdir(parents=True, exist_ok=True)
