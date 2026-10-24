@@ -145,3 +145,30 @@ def test_lookup_in_an_unknown_area_fails_clearly(vba_kb: Path, capsys: pytest.Ca
 
     assert code == 2
     assert "Unknown Area 'vba-4d' in Release 2024; available: vba-3d" in capsys.readouterr().err
+
+
+def test_browse_prints_the_entries_of_a_table_of_contents_book(
+    vba_kb: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    book = "Automation and Scripting > Visual Basic (VBA) > 3D Simulation VBA > VBA Objects > Solver"
+
+    code = main(["browse", f"{book} > high frequency", "--kb", str(vba_kb)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith(f"Table of contents > {book} > High Frequency, Release 2024: 5 entries")
+    assert f"- Solver (HF)  [{SOLVER_HF}]" in out
+
+
+def test_browse_prints_the_topics_of_a_keyword(vba_kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["browse", "Solver Object", "--tree", "keywords", "--kb", str(vba_kb)])
+
+    assert code == 0
+    assert f"- Solver Object  [{SOLVER_HF}]" in capsys.readouterr().out
+
+
+def test_browsing_an_unknown_entry_fails_clearly(vba_kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["browse", "No Such Book", "--kb", str(vba_kb)])
+
+    assert code == 2
+    assert "No entry 'No Such Book' at the top level" in capsys.readouterr().err

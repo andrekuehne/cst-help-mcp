@@ -1,4 +1,5 @@
-"""The Knowledge Base's SQLite index: the exact API Entry table and an FTS5 word index (ADR 0008)."""
+"""The Knowledge Base's SQLite index: the exact API Entry table, an FTS5 word index (ADR 0008)
+and the navigation trees."""
 
 from __future__ import annotations
 
@@ -7,7 +8,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from cst_help_mcp.model import Document
+from cst_help_mcp.model import Document, NavNode, NavTree
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS collections (
@@ -50,6 +51,19 @@ CREATE INDEX IF NOT EXISTS section_areas_area ON section_areas (area, section);
 CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5 (
     title, headings, body, tokenize = 'unicode61'
 );
+-- The table of contents and the keyword index, each in its order.
+CREATE TABLE IF NOT EXISTS nav_entries (
+    id INTEGER PRIMARY KEY,
+    collection TEXT NOT NULL,
+    release TEXT NOT NULL,
+    tree TEXT NOT NULL,
+    parent INTEGER,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    locator TEXT,
+    children INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS nav_entries_parent ON nav_entries (tree, parent);
 """
 
 
@@ -60,6 +74,12 @@ class IndexedBuild:
     build: str
     failed: int
     docs: Iterable[Document]
+    navigation: dict[NavTree, list[NavNode]]
+
+
+def name_key(name: str) -> str:
+    """A navigation entry's name as browse paths match it: without regard to case and spacing."""
+    return " ".join(name.split()).casefold()
 
 
 def open_read_only(db_path: Path) -> sqlite3.Connection:
@@ -79,6 +99,8 @@ def write_index(db_path: Path, builds: Iterable[IndexedBuild]) -> None:
                 )
                 for doc in build.docs:
                     _insert(con, build.collection, doc)
+                for tree, nodes in build.navigation.items():
+                    _insert_nav(con, build.collection, build.release, tree, None, nodes)
     finally:
         con.close()
 
@@ -126,3 +148,29 @@ def _insert(con: sqlite3.Connection, collection: str, doc: Document) -> None:
             "INSERT INTO section_areas VALUES (?, ?)",
             [(cur.lastrowid, area) for area in (doc.area, *doc.alias_areas)],
         )
+
+
+def _insert_nav(
+    con: sqlite3.Connection,
+    collection: str,
+    release: str,
+    tree: NavTree,
+    parent: int | None,
+    nodes: list[NavNode],
+) -> None:
+    for node in nodes:
+        cur = con.execute(
+            "INSERT INTO nav_entries (collection, release, tree, parent, name, name_key, locator, children)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                collection,
+                release,
+                tree,
+                parent,
+                node.name,
+                name_key(node.name),
+                node.locator,
+                len(node.children),
+            ),
+        )
+        _insert_nav(con, collection, release, tree, cur.lastrowid, node.children)

@@ -6,7 +6,7 @@ import html
 import json
 import re
 
-from cst_help_mcp.model import Block, Document, Link, escape_label, replace_links
+from cst_help_mcp.model import Block, Document, Link, NavNode, escape_label, replace_links
 
 
 def render_markdown(doc: Document) -> str:
@@ -16,17 +16,51 @@ def render_markdown(doc: Document) -> str:
         "title": doc.title,
         "source": doc.source_path,
     }
+    for key, values in (
+        ("toc_paths", doc.toc_paths),
+        ("keywords", doc.keywords),
+        ("context_ids", doc.context_ids),
+    ):
+        if values:
+            front[key] = values
     if doc.aliases:
         front["aliases"] = doc.aliases
     if doc.alias_areas:
         front["alias_areas"] = doc.alias_areas
-    lines = ["---", *(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in front.items()), "---", ""]
+    lines = _frontmatter(front)
     for section in doc.sections:
         lines.extend(f'<a id="{anchor}"></a>' for anchor in section.anchors)
         for block in section.blocks:
             lines.extend(_block(block, doc.links))
             lines.append("")
     return "\n".join(lines).rstrip("\n") + "\n"
+
+
+def render_navigation(release: str, title: str, nodes: list[NavNode]) -> str:
+    """An entry file, such as toc.md, listing a navigation tree as nested links to Locators.
+
+    It sits at the root of the Collection's tree, so the Locators resolve as relative links.
+    """
+    lines = [*_frontmatter({"release": release, "title": title}), f"# {title}", ""]
+
+    def add(nodes: list[NavNode], depth: int) -> None:
+        for node in nodes:
+            label = _link(node.name, node.locator) if node.locator else node.name
+            lines.append(f"{'  ' * depth}- {label}")
+            add(node.children, depth + 1)
+
+    add(nodes, 0)
+    return "\n".join(lines) + "\n"
+
+
+def _frontmatter(front: dict[str, object]) -> list[str]:
+    return ["---", *(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in front.items()), "---", ""]
+
+
+def _link(label: str, href: str) -> str:
+    if re.search(r"[\s()<>]", href):
+        href = f"<{href}>"
+    return f"[{escape_label(label)}]({href})"
 
 
 def _block(block: Block, links: list[Link]) -> list[str]:
@@ -65,11 +99,7 @@ def _href(link: Link) -> str | None:
 def _inline(text: str, links: list[Link]) -> str:
     def markdown(label: str, index: int) -> str:
         href = _href(links[index])
-        if href is None:
-            return label
-        if re.search(r"[\s()<>]", href):
-            href = f"<{href}>"
-        return f"[{escape_label(label)}]({href})"
+        return label if href is None else _link(label, href)
 
     return replace_links(text, markdown)
 

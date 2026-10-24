@@ -14,6 +14,9 @@ from typing import Any, Literal
 
 BlockKind = Literal["heading", "paragraph", "note", "list", "field", "code", "table", "api_signature"]
 LinkStatus = Literal["unresolved", "resolved", "external", "outside"]
+NavTree = Literal["toc", "keywords"]  # the table of contents and the author keyword index
+# Joins the names of a table-of-contents path ("3D Simulation > Solvers") or a sub-keyword.
+SEPARATOR = " > "
 
 # A link's span in a block's text: ``[label](@N)``, N indexing Document.links. The label is
 # Markdown-escaped, so the text stays valid Markdown and the target can change without re-parsing.
@@ -116,6 +119,13 @@ class Document:
     alias_areas: list[str] = field(default_factory=list)
     # Every id and name the source declares, so link fragments are checked beyond Section anchors.
     source_anchors: list[str] = field(default_factory=list)
+    # Table-of-contents paths ("3D Simulation > Solvers > ..."), from the table of contents or,
+    # for a Document in none, from its breadcrumbs.
+    toc_paths: list[str] = field(default_factory=list)
+    keywords: list[str] = field(default_factory=list)  # author keywords, a sub-keyword as "Key > Sub"
+    context_ids: list[str] = field(default_factory=list)  # context-help map ids
+    # The breadcrumb paths embedded in the source, relative to its own project's table of contents.
+    breadcrumbs: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -134,3 +144,31 @@ class Document:
         links = [Link(**link) for link in data["links"]]
         fields = {k: v for k, v in data.items() if k not in ("sections", "api_entries", "links")}
         return cls(**fields, sections=sections, api_entries=entries, links=links)
+
+
+@dataclass
+class NavNode:
+    """A table-of-contents entry or a keyword index entry.
+
+    A book or a keyword holds children; an entry that leads to a topic has an ``href`` (relative
+    to the release folder) until the build resolves it to a Document's ``locator``. A keyword's
+    children are its topics, then its sub-keywords.
+    """
+
+    name: str
+    href: str | None = None
+    locator: str | None = None
+    children: list[NavNode] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "locator": self.locator,
+            "children": [child.to_dict() for child in self.children],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> NavNode:
+        return cls(
+            data["name"], locator=data["locator"], children=[cls.from_dict(c) for c in data["children"]]
+        )

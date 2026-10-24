@@ -58,7 +58,35 @@ def normalise_href(href: str, source_path: str) -> str | None:
     return f"{resolved}#{fragment}" if fragment else resolved
 
 
-def resolve_links(docs: list[Document], release_folders: Iterable[Path]) -> LinkReport:
+class Inventory:
+    """Every Document by its source path and its Aliases' paths, and their anchors, matched without regard to case."""
+
+    def __init__(self, docs: Iterable[Document]) -> None:
+        docs = list(docs)
+        self._by_path = {path.lower(): doc for doc in docs for path in (doc.source_path, *doc.aliases)}
+        self._anchors = {
+            doc.locator: {a.lower(): a for section in doc.sections for a in section.anchors} for doc in docs
+        }
+
+    def document(self, path: str) -> Document | None:
+        return self._by_path.get(path.lower())
+
+    def anchor(self, doc: Document, fragment: str) -> str | None:
+        """The Section anchor a fragment names; anchors generated from a source id that is no valid fragment match it too."""
+        known = self._anchors[doc.locator]
+        return known.get(fragment.lower()) or known.get(anchor_for(fragment))
+
+    def locate(self, href: str) -> str | None:
+        """The Locator a path leads to, with the anchor its fragment names, if it matches one."""
+        path, _, fragment = href.partition("#")
+        doc = self.document(path)
+        if doc is None:
+            return None
+        anchor = self.anchor(doc, fragment) if fragment else None
+        return f"{doc.locator}#{anchor}" if anchor else doc.locator
+
+
+def resolve_links(docs: list[Document], inventory: Inventory, release_folders: Iterable[Path]) -> LinkReport:
     """Set every link's status and target, and report them.
 
     A link is resolved when it leads to a Document or Alias, external when it is a URL,
@@ -66,10 +94,6 @@ def resolve_links(docs: list[Document], release_folders: Iterable[Path]) -> Link
     filtered out, a PDF, an image), and unresolved when its file exists nowhere in the
     release folder.
     """
-    by_path = {path.lower(): doc for doc in docs for path in (doc.source_path, *doc.aliases)}
-    anchors = {
-        doc.locator: {a.lower(): a for section in doc.sections for a in section.anchors} for doc in docs
-    }
     on_disk = _Files(release_folders)
     report = LinkReport()
     for doc in docs:
@@ -77,21 +101,14 @@ def resolve_links(docs: list[Document], release_folders: Iterable[Path]) -> Link
             if _URL.match(link.href):
                 link.status = "external"
             else:
-                _resolve(doc, link, by_path, anchors, on_disk, report)
+                _resolve(doc, link, inventory, on_disk, report)
             report.statuses[link.status] += 1
     return report
 
 
-def _resolve(
-    doc: Document,
-    link: Link,
-    by_path: dict[str, Document],
-    anchors: dict[str, dict[str, str]],
-    on_disk: _Files,
-    report: LinkReport,
-) -> None:
+def _resolve(doc: Document, link: Link, inventory: Inventory, on_disk: _Files, report: LinkReport) -> None:
     path, _, fragment = link.href.partition("#")
-    target = by_path.get(path.lower())
+    target = inventory.document(path)
     if target is None:
         if on_disk.exists(path):
             link.status = "outside"
@@ -104,9 +121,7 @@ def _resolve(
     link.target = target.locator
     if not fragment:
         return
-    known = anchors[target.locator]
-    # Anchors generated from a source id that is no valid fragment still match it.
-    anchor = known.get(fragment.lower()) or known.get(anchor_for(fragment))
+    anchor = inventory.anchor(target, fragment)
     if anchor:
         link.target += f"#{anchor}"
     elif fragment.lower() not in {a.lower() for a in target.source_anchors}:

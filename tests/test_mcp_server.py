@@ -40,10 +40,10 @@ async def client(kb: KnowledgeBase) -> AsyncIterator[Client]:
         yield connected
 
 
-async def test_exposes_lookup_and_search_with_their_parameters(client: Client) -> None:
+async def test_exposes_its_tools_with_their_parameters(client: Client) -> None:
     tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
-    assert set(tools) == {"cst_help_lookup", "cst_help_search"}
+    assert set(tools) == {"cst_help_lookup", "cst_help_search", "cst_help_browse"}
     lookup: dict[str, Any] = tools["cst_help_lookup"].input_schema
     assert set(lookup["properties"]) == {"name", "area"}
     assert lookup["required"] == ["name"]
@@ -51,6 +51,9 @@ async def test_exposes_lookup_and_search_with_their_parameters(client: Client) -
     assert set(search["properties"]) == {"query", "areas", "limit"}
     assert search["required"] == ["query"]
     assert search["properties"]["limit"]["maximum"] == 10
+    browse: dict[str, Any] = tools["cst_help_browse"].input_schema
+    assert set(browse["properties"]) == {"path", "tree"}
+    assert browse.get("required", []) == []
 
 
 async def test_lookup_returns_signature_description_locator_and_release(client: Client) -> None:
@@ -101,6 +104,48 @@ async def test_search_returns_at_most_ten_hits_naming_locator_and_release(client
     assert text.count("Locator: ") == 10
     assert text.count("Release 2024") >= 10
     assert _max_tokens(text) <= 3_000
+
+
+SOLVER_BOOK = "Automation and Scripting > Visual Basic (VBA) > 3D Simulation VBA > VBA Objects > Solver"
+
+
+async def test_browse_lists_the_entries_of_a_book_with_their_locators(client: Client) -> None:
+    text, is_error = await _call(client, "cst_help_browse", {"path": f"{SOLVER_BOOK} > high frequency"})
+
+    assert not is_error
+    assert text.startswith(f"Table of contents > {SOLVER_BOOK} > High Frequency, Release 2024:")
+    assert f"- Solver (HF)\n  Locator: {SOLVER_HF}\n" in text
+
+
+async def test_browse_shows_books_with_the_number_of_entries_below_them(client: Client) -> None:
+    text, is_error = await _call(client, "cst_help_browse", {"path": SOLVER_BOOK})
+
+    assert not is_error
+    assert "\n- High Frequency (5 entries below)\n" in text
+
+
+async def test_browsing_the_whole_keyword_index_stays_within_budget(client: Client) -> None:
+    text, is_error = await _call(client, "cst_help_browse", {"tree": "keywords"})
+
+    assert not is_error
+    assert text.startswith("Keyword index, Release 2024:")
+    assert "more not shown" in text
+    assert _max_tokens(text) < 10_000
+
+
+async def test_browsing_a_keyword_lists_its_topics(client: Client) -> None:
+    text, is_error = await _call(client, "cst_help_browse", {"path": "Solver Object", "tree": "keywords"})
+
+    assert not is_error
+    assert f"- Solver Object\n  Locator: {SOLVER_HF}" in text
+
+
+async def test_browsing_an_unknown_entry_is_a_clear_error(client: Client) -> None:
+    text, is_error = await _call(client, "cst_help_browse", {"path": "Automation and Scriptin"})
+
+    assert is_error
+    assert "No entry 'Automation and Scriptin' at the top level" in text
+    assert "nearest: Automation and Scripting" in text
 
 
 async def test_search_limit_above_ten_is_refused(client: Client) -> None:

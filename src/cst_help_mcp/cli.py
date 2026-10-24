@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from cst_help_mcp.errors import CstHelpError
-from cst_help_mcp.retrieval import KnowledgeBase
+from cst_help_mcp.retrieval import NAV_TREES, KnowledgeBase
 
 DEFAULT_CONFIG = "cst-help.toml"
 
@@ -63,6 +63,16 @@ def _parser() -> argparse.ArgumentParser:
     search.add_argument("--area", action="append", dest="areas")
     search.add_argument("--limit", type=int, default=10)
     search.set_defaults(run=_search)
+
+    browse = commands.add_parser(
+        "browse", help="list the entries below a table-of-contents book or a keyword"
+    )
+    browse.add_argument(
+        "path", nargs="?", default="", help='entry names joined by ">", such as "3D Simulation > Solvers"'
+    )
+    _add_kb_arguments(browse)
+    browse.add_argument("--tree", choices=list(NAV_TREES), default="toc")
+    browse.set_defaults(run=_browse)
 
     serve = commands.add_parser(
         "serve", help="serve one Release of the Knowledge Base as an MCP server over stdio"
@@ -165,6 +175,16 @@ def _search(args: argparse.Namespace) -> int:
         print(f"  {hit.heading_path}")
         print(f"  {hit.snippet}")
         print()
+    return 0
+
+
+def _browse(args: argparse.Namespace) -> int:
+    with KnowledgeBase.open(args.kb, args.release) as kb:
+        result = kb.browse(args.path, tree=args.tree)
+    print(f"{result.title}, Release {result.release}: {len(result.entries)} entries")
+    for entry in result.entries:
+        locator = f"  [{entry.locator}]" if entry.locator else ""
+        print(f"- {entry}{locator}")
     return 0
 
 

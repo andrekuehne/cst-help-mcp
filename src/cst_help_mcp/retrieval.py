@@ -5,19 +5,33 @@ It is opened on a Knowledge Base and one Release, and never mixes Releases (ADR 
 
 from __future__ import annotations
 
+import difflib
 import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Self
+from typing import NamedTuple, Self
 
 from cst_help_mcp import layout
 from cst_help_mcp.errors import KnowledgeBaseError
-from cst_help_mcp.index import open_read_only
+from cst_help_mcp.index import name_key, open_read_only
+from cst_help_mcp.model import SEPARATOR, NavTree
 
 MAX_HITS = 10
 # VBA code calls the Application object's methods without an object; its help page is "Project Object".
 _OBJECT_ALIASES = {"application": "project"}
+
+NAV_TREES: dict[NavTree, str] = {"toc": "table of contents", "keywords": "keyword index"}
+
+
+class _NavRow(NamedTuple):
+    """A navigation entry as browse reads it."""
+
+    id: int
+    key: str
+    name: str
+    locator: str | None
+    children: int
 
 
 @dataclass(frozen=True)
@@ -41,6 +55,30 @@ class SearchHit:
     title: str
     heading_path: str
     snippet: str
+
+
+@dataclass(frozen=True)
+class BrowseEntry:
+    name: str
+    locator: str | None  # None for a book or keyword that is no Document of its own
+    children: int  # the entries below it
+
+    def __str__(self) -> str:
+        below = f" ({self.children} entries below)" if self.children else ""
+        return f"{self.name}{below}"
+
+
+@dataclass(frozen=True)
+class BrowseResult:
+    tree: NavTree
+    release: str
+    path: list[str]  # the names of the entry browsed, as the help writes them; empty for the top level
+    entries: list[BrowseEntry]
+
+    @property
+    def title(self) -> str:
+        """The tree and the path browsed, such as "Table of contents > 3D Simulation"."""
+        return SEPARATOR.join([NAV_TREES[self.tree].capitalize(), *self.path])
 
 
 class KnowledgeBase:
@@ -135,6 +173,51 @@ class KnowledgeBase:
             SearchHit(locator, release, area, kind, title, heading_path, " ".join(snippet.split()))
             for locator, release, area, kind, title, heading_path, snippet in self._con.execute(sql, params)
         ]
+
+    def browse(self, path: str = "", tree: NavTree = "toc") -> BrowseResult:
+        """The entries below a table-of-contents book or a keyword, given as names joined by ">".
+
+        Names are matched without regard to case and spacing; an empty path gives the top level.
+        """
+        if tree not in NAV_TREES:
+            raise KnowledgeBaseError(f"Unknown tree '{tree}'; available: {', '.join(NAV_TREES)}")
+        names = [n for n in (" ".join(part.split()) for part in path.split(">")) if n]
+        parents: list[int] | None = None
+        found: list[str] = []
+        for name in names:
+            rows = self._nav_children(tree, parents)
+            # Same-named books, such as one per Collection, are browsed together.
+            matches = [r for r in rows if r.key == name_key(name) and r.children]
+            if not matches:
+                raise KnowledgeBaseError(self._not_found(tree, name, found, rows))
+            found.append(matches[0].name)
+            parents = [r.id for r in matches]
+        entries = [BrowseEntry(r.name, r.locator, r.children) for r in self._nav_children(tree, parents)]
+        return BrowseResult(tree, self.release, found, entries)
+
+    def _nav_children(self, tree: NavTree, parents: list[int] | None) -> list[_NavRow]:
+        sql = "SELECT id, name_key, name, locator, children FROM nav_entries WHERE release = ? AND tree = ?"
+        params: list[str | int] = [self.release, tree]
+        if parents is None:
+            sql += " AND parent IS NULL"
+        else:
+            sql += f" AND parent IN ({', '.join('?' * len(parents))})"
+            params.extend(parents)
+        return [_NavRow(*row) for row in self._con.execute(sql + " ORDER BY id", params)]
+
+    def _not_found(self, tree: NavTree, name: str, found: list[str], rows: list[_NavRow]) -> str:
+        where = f"under '{SEPARATOR.join(found)}'" if found else "at the top level"
+        leaf = next((r for r in rows if r.key == name_key(name)), None)
+        if leaf is not None:
+            return (
+                f"'{leaf.name}' {where} of the {NAV_TREES[tree]} has no entries below it; read {leaf.locator}"
+            )
+        message = f"No entry '{name}' {where} of the {NAV_TREES[tree]} of Release {self.release}"
+        by_key = {r.key: r.name for r in rows if r.children}
+        nearest = difflib.get_close_matches(name_key(name), list(by_key), n=3)
+        if nearest:
+            message += f"; nearest: {', '.join(by_key[k] for k in nearest)}"
+        return message
 
     def _check_areas(self, areas: list[str]) -> None:
         for area in areas:

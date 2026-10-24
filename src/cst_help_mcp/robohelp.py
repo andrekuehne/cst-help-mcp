@@ -17,7 +17,8 @@ from bs4.element import CData, NavigableString, PageElement
 
 from cst_help_mcp.links import normalise_href
 from cst_help_mcp.locator import anchor_for
-from cst_help_mcp.model import ApiEntry, Block, Document, Link, Section, link_span, plain
+from cst_help_mcp.model import SEPARATOR, ApiEntry, Block, Document, Link, Section, link_span, plain
+from cst_help_mcp.navigation import decode_js_string
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,7 @@ _BLOCK_TAGS = frozenset(
 _NOTE = re.compile(r"(?:please\s+)?note\s*:\s*", re.IGNORECASE)
 # Source ids are kept as anchors only when they are usable as link fragments.
 _SOURCE_ID = re.compile(r"[A-Za-z][A-Za-z0-9_.:-]*")
+_TOC_INFO = re.compile(r'addTocInfo\s*\(\s*"((?:\\.|[^"\\])*)"\s*\)', re.DOTALL)
 
 
 def is_topic(html: str) -> bool:
@@ -126,7 +128,19 @@ def read_topic(
         api_entries=builder.entries,
         links=builder.links,
         source_anchors=_source_anchors(content),
+        breadcrumbs=breadcrumbs(html),
     )
+
+
+def breadcrumbs(html: str) -> list[str]:
+    """The table-of-contents paths a topic's script passes to ``addTocInfo``, one per place it is listed."""
+    paths = []
+    for body in _TOC_INFO.findall(html):
+        names = [" ".join(name.split()) for name in decode_js_string(body).split("\n")]
+        path = SEPARATOR.join(name for name in names if name)
+        if path and path not in paths:
+            paths.append(path)
+    return paths
 
 
 def _content_elements(body: Tag) -> list[Tag]:

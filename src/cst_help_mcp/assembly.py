@@ -12,11 +12,12 @@ import shutil
 import stat
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from cst_help_mcp import layout
 from cst_help_mcp.errors import KnowledgeBaseError
 from cst_help_mcp.index import IndexedBuild, write_index
-from cst_help_mcp.model import Document
+from cst_help_mcp.model import Document, NavNode, NavTree
 
 
 @dataclass(frozen=True)
@@ -50,7 +51,10 @@ def _indexed(build: Path) -> IndexedBuild:
     manifest = layout.BuildManifest.read(build)
     tree = build / layout.TREE
     docs = (Document.from_dict(layout.read_json(tree / f"{locator}.json")) for locator in manifest.documents)
-    return IndexedBuild(manifest.collection, manifest.release, build.name, manifest.failed, docs)
+    nav_file = build / layout.NAVIGATION_FILE
+    trees: dict[NavTree, list[Any]] = layout.read_json(nav_file) if nav_file.is_file() else {}
+    navigation = {tree: [NavNode.from_dict(n) for n in nodes] for tree, nodes in trees.items()}
+    return IndexedBuild(manifest.collection, manifest.release, build.name, manifest.failed, docs, navigation)
 
 
 def _update_view(kb_path: Path, collection: str, tree: Path) -> None:

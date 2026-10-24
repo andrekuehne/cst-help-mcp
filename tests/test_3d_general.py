@@ -21,7 +21,8 @@ def test_the_brick_dialog_page_renders_its_prose_and_field_definitions(prose_bui
 
     assert md.startswith(
         '---\nrelease: "2024"\narea: "3d"\ntitle: "Create a Brick"\n'
-        'source: "Online Help/mergedProjects/3D/common_struct/common_struct_brick.htm"\n---\n\n# Create a Brick\n'
+        'source: "Online Help/mergedProjects/3D/common_struct/common_struct_brick.htm"\n'
+        'keywords: ["Brick", "Brick Dialog", "Create a Brick"]\n---\n\n# Create a Brick\n'
     )
     # The introduction is <h3> in the source.
     assert (

@@ -15,10 +15,17 @@ from cst_help_mcp import layout
 from cst_help_mcp.assembly import assemble
 from cst_help_mcp.config import CollectionConfig, SourceConfig, load_config
 from cst_help_mcp.errors import BuildError
-from cst_help_mcp.links import LinkReport, resolve_links
+from cst_help_mcp.links import Inventory, LinkReport, resolve_links
 from cst_help_mcp.locator import locator_for
 from cst_help_mcp.model import Document, LinkStatus
-from cst_help_mcp.render import render_markdown
+from cst_help_mcp.navigation import (
+    Navigation,
+    NavigationReport,
+    apply_navigation,
+    read_navigation,
+    resolve_navigation,
+)
+from cst_help_mcp.render import render_markdown, render_navigation
 from cst_help_mcp.robohelp import PROSE, VBA, Profile, is_topic, read_topic
 
 
@@ -80,6 +87,7 @@ class BuildReport:
     missing_assets: int | None = None
     failures: list[Failure] = field(default_factory=list)
     links: LinkReport = field(default_factory=LinkReport)
+    navigation: NavigationReport = field(default_factory=NavigationReport)
     unsupported: Counter[str] = field(default_factory=Counter)  # files no reader handles, by extension
     api_entries: int = 0
 
@@ -122,6 +130,7 @@ class BuildReport:
             "outside_links": dict(self.links.outside.most_common()),
             "unresolved_links": [asdict(u) for u in self.links.unresolved],
             "missing_anchors": [asdict(u) for u in self.links.missing_anchors],
+            "navigation": asdict(self.navigation),
             "failures": [asdict(f) for f in self.failures],
             "unsupported": dict(sorted(self.unsupported.items())),
         }
@@ -145,6 +154,9 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
     report = BuildReport()
     docs = [doc for source in collection.sources for doc in _read_source(collection, source, report)]
     _check_locators(docs)
+    release_folders = [source.path for source in collection.sources]
+    navigation = read_navigation(release_folders)
+    apply_navigation(docs, navigation)
     docs = _merge_aliases(docs)
     report.aliases = report.converted - len(docs)
     if not docs:
@@ -154,11 +166,14 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
     if strict and report.failures:
         raise BuildError(f"{report.failed} Documents failed to build, and --strict is set: {_listed(report)}")
     report.api_entries = sum(len(d.api_entries) for d in docs)
-    report.links = resolve_links(docs, [source.path for source in collection.sources])
+    inventory = Inventory(docs)
+    report.links = resolve_links(docs, inventory, release_folders)
+    report.navigation = resolve_navigation(navigation, inventory)
     build_id = layout.new_id()
     final = layout.build_dir(config.kb_path, collection.name, build_id)
     with layout.staged(final) as staging:
         _write_tree(staging / layout.TREE, docs)
+        _write_navigation(staging, collection.release, navigation)
         layout.write_json(staging / layout.REPORT_FILE, report.to_dict())
         manifest = layout.BuildManifest(
             collection=collection.name,
@@ -260,6 +275,12 @@ def _merge_aliases(docs: list[Document]) -> list[Document]:
             first.aliases.append(doc.source_path)
             if doc.area != first.area and doc.area not in first.alias_areas:
                 first.alias_areas.append(doc.area)
+            for kept_values, values in (
+                (first.toc_paths, doc.toc_paths),
+                (first.keywords, doc.keywords),
+                (first.context_ids, doc.context_ids),
+            ):
+                kept_values.extend(v for v in values if v not in kept_values)
     return list(kept.values())
 
 
@@ -272,3 +293,16 @@ def _write_tree(tree: Path, docs: list[Document]) -> None:
         md.write_text(render_markdown(doc), encoding="utf-8", newline="\n")
         model = md.with_name(md.name + ".json")
         model.write_text(json.dumps(doc.to_dict(), ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _write_navigation(build: Path, release: str, navigation: Navigation) -> None:
+    """Write the navigation trees for assembly, and the entry files that list them in the tree."""
+    trees = navigation.trees()
+    layout.write_json(
+        build / layout.NAVIGATION_FILE,
+        {tree: [node.to_dict() for node in nodes] for tree, nodes in trees.items()},
+    )
+    for tree, nodes in trees.items():
+        name, title = layout.ENTRY_FILES[tree]
+        entry_file = build / layout.TREE / name
+        entry_file.write_text(render_navigation(release, title, nodes), encoding="utf-8", newline="\n")

@@ -91,7 +91,7 @@ def test_markdown_has_frontmatter_and_the_model_is_persisted_next_to_it(vba_kb: 
         'area: "vba-3d"\n'
         'title: "Solver Object"\n'
         'source: "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_solver_object.htm"\n'
-        "---\n"
+        'toc_paths: ["Automation and Scripting > '
     )
     model = json.loads(md_path.with_name(md_path.name + ".json").read_text(encoding="utf-8"))
     assert model["locator"] == SOLVER_HF

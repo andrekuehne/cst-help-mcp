@@ -1,6 +1,6 @@
 """Where a Knowledge Base keeps its Builds, assemblies and the active pointer (ADR 0009).
 
-    <kb>/builds/<collection>/<build id>/   one immutable Build: build.json, report.json, tree/
+    <kb>/builds/<collection>/<build id>/   one immutable Build: build.json, report.json, navigation.json, tree/
     <kb>/assemblies/<assembly id>/         one assembled database: assembly.json, index.sqlite
     <kb>/active.json                       the pointer to the active assembly, replaced atomically
     <kb>/<collection>/                     the readable view of the active Build's tree
@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from cst_help_mcp.errors import KnowledgeBaseError
+from cst_help_mcp.model import NavTree
 
 if sys.platform == "win32":
     import msvcrt
@@ -37,6 +38,12 @@ POINTER_FILE = "active.json"
 LOCK_FILE = ".lock"
 BUILD_MANIFEST = "build.json"
 REPORT_FILE = "report.json"
+NAVIGATION_FILE = "navigation.json"
+# Entry files at the root of a Build's tree, listing its navigation trees.
+ENTRY_FILES: dict[NavTree, tuple[str, str]] = {
+    "toc": ("toc.md", "Table of contents"),
+    "keywords": ("keywords.md", "Keywords"),
+}
 ASSEMBLY_MANIFEST = "assembly.json"
 INDEX_FILE = "index.sqlite"
 TREE = "tree"
