@@ -11,11 +11,11 @@
 - [x] Reads stay inside the Knowledge Base root, the server makes no network calls, and it logs to stderr only.
 - [x] Every response stays under 10,000 tokens. Search returns at most 10 hits in about 3,000 tokens.
 - [x] Contract tests use the SDK's in-memory client to cover tool names and parameter schemas, the start of the instructions, the budgets, and clear errors for unknown names.
-- [ ] Manual check: Claude Code, configured with the printed entry, looks up `Solver.FrequencyRange` through the server.
+- [x] Manual check: Claude Code, configured with the printed entry, looks up `Solver.FrequencyRange` through the server.
 
 ## Comments
 
-**Implemented (2026-10-24).** 18 new tests: 15 MCP contract tests through the SDK's in-memory client (including one real stdio round trip through `cst-help serve`) and 3 CLI tests; the full suite has 46. The manual Claude Code check is still open: build a Knowledge Base, run `cst-help instructions --kb <path>`, paste the entry into `.mcp.json`, and ask Claude Code for `Solver.FrequencyRange`.
+**Implemented (2026-10-24).** 18 new tests: 15 MCP contract tests through the SDK's in-memory client (including one real stdio round trip through `cst-help serve`) and 3 CLI tests; the full suite has 46. The manual check passed: Claude Code, in another project configured with the entry printed for the development `.kb`, looked up `Solver.FrequencyRange` through the server.
 
 Decisions for later tickets:
 
