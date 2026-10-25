@@ -46,6 +46,10 @@ _Avoid_: duplicate, copy
 An addressable part of a Document, and the unit that search returns. In code, a procedure or the file header.
 _Avoid_: chunk, passage
 
+**Ribbon Path**:
+The line under a dialog topic's title that says where the dialog is reached in CST's ribbon, such as "Simulation: Solver > Setup Solver". Metadata of the Document, not one of its headings.
+_Avoid_: breadcrumb (a breadcrumb is a table-of-contents path), menu path (reserved for the Library)
+
 **Asset**:
 An image or other non-text file that a Document references.
 _Avoid_: attachment, resource
