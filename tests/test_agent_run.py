@@ -71,6 +71,19 @@ def test_a_question_whose_expected_page_is_read_is_a_hit_and_a_missed_one_fails_
     assert (tmp_path / "runs" / "API-01.jsonl").is_file()
 
 
+def test_the_report_breaks_the_counts_down_by_category(
+    vba_kb: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = vba_kb / "cst-2024"
+    args = ["--folder", str(folder), "--questions", str(BENCHMARK), "--only", "API-01,API-02,SOL-04"]
+
+    _agent_run().main([*args, "--", *_fake_agent(tmp_path)])
+
+    out = capsys.readouterr().out
+    assert "  Exact API lookup: 1 of 2, median 3" in out
+    assert "  Solver-specific: 1 of 1, median 3" in out
+
+
 def test_saved_transcripts_are_scored_again_without_an_agent(
     vba_kb: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -102,6 +115,19 @@ def test_only_questions_whose_areas_are_built_are_scored(
 
 
 GETTING_STARTED = "manuals/CST Studio Suite - Getting Started.pdf"
+
+
+def test_a_question_whose_area_is_built_but_whose_documents_are_not_is_reported_as_a_miss(
+    manuals_build: ProseBuild, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # REL-01 cites the Release Notes, which are not among the manuals that are built.
+    args = ["--folder", str(manuals_build.tree), "--questions", str(BENCHMARK), "--only", "REL-01"]
+
+    code = _agent_run().main([*args, "--", *_fake_agent(tmp_path)])
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "REL-01    tuning    MISS, 0 calls (no expected Document is in the folder)" in out
 
 
 def _line_of(file: Path, text: str) -> int:

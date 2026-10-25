@@ -14,7 +14,7 @@ The benchmark is run by agents, not by a ranker (ADR 0014). For each question, a
 
 - **Hit:** the agent read an expected Document of the question. An Alias of it counts. For a PDF, the page it read must include the given page.
 - **Calls:** the number of tool calls up to and including the first read of an expected Document, counting the `AGENTS.md` read as call 1. Report the distribution and the median.
-- **Thresholds:** every scorable question is a hit, and the median is at most 4 calls. Set from the two runs of 2026-10-25 (`.scratch/cst-help-kb/files-only-experiment.md`), which both met them.
+- **Thresholds:** every scorable question is a hit, and the median is at most 4 calls. Set from the two runs of 2026-10-25 (`.scratch/cst-help-kb/files-only-experiment.md`), which both met them. Kept unchanged after the proof-of-concept slice (ticket 16): 26 of 27, median 3, maximum 5, no category's median above 4. The run fails on its one miss, REL-01, whose Release Notes the slice does not build.
 - **API questions:** also check that the listed API Entry has a line in `api.md` pointing at the first expected source.
 
 ## How to read and edit

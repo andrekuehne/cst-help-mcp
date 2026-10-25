@@ -58,6 +58,7 @@ class Question:
     text: str
     areas: tuple[str, ...]
     sources: tuple[tuple[str, int | None], ...]  # source paths, relative to the corpus root, and PDF pages
+    category: str  # the name its id prefix has in the benchmark's [categories]
 
 
 @dataclass(frozen=True)
@@ -145,26 +146,36 @@ def main(argv: list[str] | None = None) -> int:
         transcripts.mkdir(parents=True, exist_ok=True)
     scores = []
     for question in questions:
-        expected = folder.expected(question)
-        if not expected:
-            scores.append(Score(question, 0, None, "no expected Document is in the folder"))
-            continue
-        if args.rescore:
-            file = args.rescore / f"{question.id}.jsonl"
-            if not file.is_file():
-                scores.append(Score(question, 0, None, f"no transcript {file.name}"))
-                continue
-            output = file.read_text(encoding="utf-8")
-        else:
-            output = _run(args.command, folder.path, question, args.timeout)
-            if transcripts:
-                (transcripts / f"{question.id}.jsonl").write_text(output, encoding="utf-8")
-        scores.append(score(question, output, folder.path, expected))
+        scores.append(_score_one(question, folder, args.rescore, args.command, args.timeout, transcripts))
         print(_line(scores[-1]), flush=True)
     print()
     report, passed = summary(scores)
     print(report)
     return 0 if passed else 1
+
+
+def _score_one(
+    question: Question,
+    folder: Folder,
+    rescore: Path | None,
+    command: list[str],
+    timeout: float,
+    transcripts: Path | None,
+) -> Score:
+    """Score one question: from its saved transcript with --rescore, else by running the agent."""
+    expected = folder.expected(question)
+    if not expected:
+        return Score(question, 0, None, "no expected Document is in the folder")
+    if rescore:
+        file = rescore / f"{question.id}.jsonl"
+        if not file.is_file():
+            return Score(question, 0, None, f"no transcript {file.name}")
+        output = file.read_text(encoding="utf-8")
+    else:
+        output = _run(command, folder.path, question, timeout)
+        if transcripts:
+            (transcripts / f"{question.id}.jsonl").write_text(output, encoding="utf-8")
+    return score(question, output, folder.path, expected)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -185,6 +196,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _load(path: Path) -> list[Question]:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
+    categories = data["categories"]
     return [
         Question(
             q["id"],
@@ -192,6 +204,7 @@ def _load(path: Path) -> list[Question]:
             q["question"],
             tuple(q["areas"]),
             tuple((s["path"], s.get("page")) for s in q["sources"]),
+            categories[q["id"].rpartition("-")[0]],
         )
         for q in data["questions"]
         if q.get("confidence") != "rejected" and q.get("scored") != "by hand"
@@ -314,12 +327,10 @@ def summary(scores: list[Score]) -> tuple[str, bool]:
     if median is not None:
         lines.append(f"Median {median:g} calls to the first expected read, maximum {max(hits)}.")
     for half in ("tuning", "held-out"):
-        own = [s.first_hit for s in scores if s.question.half == half and s.first_hit is not None]
-        total = sum(1 for s in scores if s.question.half == half)
-        if total:
-            lines.append(
-                f"  {half}: {len(own)} of {total}" + (f", median {statistics.median(own):g}" if own else "")
-            )
+        lines.extend(_group(half, [s for s in scores if s.question.half == half]))
+    lines.append("By category:")
+    for category in dict.fromkeys(s.question.category for s in scores):
+        lines.extend(_group(category, [s for s in scores if s.question.category == category]))
     lines.append("Calls to the first expected read:")
     lines.extend(f"  {calls:3}: {count}" for calls, count in sorted(Counter(hits).items()))
     if misses:
@@ -329,6 +340,15 @@ def summary(scores: list[Score]) -> tuple[str, bool]:
         "PASS" if passed else f"FAIL: every question must be a hit, with a median of at most {MEDIAN_LIMIT}"
     )
     return "\n".join(lines), passed
+
+
+def _group(name: str, scores: list[Score]) -> list[str]:
+    """One report line for a group of questions: its hits of its total, and their median."""
+    if not scores:
+        return []
+    hits = [s.first_hit for s in scores if s.first_hit is not None]
+    median = f", median {statistics.median(hits):g}" if hits else ""
+    return [f"  {name}: {len(hits)} of {len(scores)}{median}"]
 
 
 def _frontmatter(page: Path) -> dict[str, Any]:
