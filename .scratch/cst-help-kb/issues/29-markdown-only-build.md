@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `server.py`, `retrieval.py`, `index.py`, `benchmark.py`, `querylog.py` and `reading.py` are deleted, with their tests, and the `mcp` dependency is removed. The CLI keeps `build`, `assemble`, `validate` and `instructions`; `search`, `lookup`, `browse`, `read`, `serve`, `benchmark` and `benchmark-drafts` go.
 - [x] A Build writes no `*.json` next to the pages. The build manifest, report and navigation data stay in the Build directory root, outside the tree that agents read. `assets.json` moves there too.
@@ -12,7 +12,7 @@
 - [x] `cst-help instructions` prints the Knowledge Base path and an `AGENTS.md` section for a project repository that says to add the folder to the session and how to navigate it (the recipes of `AGENTS.md`), with no MCP entry.
 - [x] `docs/benchmark.toml` loses its `baseline` fields and the runner comments; it keeps questions, halves, Areas, short queries, API Entries and sources. `docs/benchmark-draft.md` describes the agent run as the scoring method.
 - [x] `scripts/agent-run.py`, or a documented procedure under `docs/agents/`, takes the question set and an agent command, runs each scorable question from the folder with file tools only, and reports per question the tool calls to the first expected Document, as `../files-only-experiment.md` did by hand. Thresholds are set from the recorded runs: every scorable question reaches an expected Document, median at most 4 calls.
-- [ ] The 17 questions of the experiment pass from a fresh build of the development `.kb` with the hand-written `AGENTS.md` copied in, with counts no worse than the recorded runs.
+- [x] The 17 questions of the experiment pass from a fresh build of the development `.kb` with the hand-written `AGENTS.md` copied in, with counts no worse than the recorded runs.
 - [x] `README.md` says what the tool produces and how to open the folder in Claude Code, Codex and Cursor.
 
 ## Comments
@@ -69,3 +69,4 @@ Criterion 7 is not met. Fresh build of the development `.kb` (1,514 Documents, n
 
 Criterion 7 stays open: the generated `AGENTS.md` of ticket 15 is to carry the rule and repeat this run (a criterion there). Seven questions are a call or two above the recorded Sonnet run, three below; single runs vary by about that much.
 
+**2026-10-25, closed.** Criterion 7 was met through ticket 15's run with the generated `AGENTS.md`: 17 of 17, median 3, maximum 5. The user accepted the one-call differences on TERM-01 and FIG-01 as noise (see ticket 15's comments).
