@@ -1,8 +1,8 @@
-# Retrieval benchmark (draft) for the CST Studio Suite 2024 Knowledge Base
+# Benchmark (draft) for the CST Studio Suite 2024 Knowledge Base
 
 ## Purpose
 
-This benchmark checks whether search finds the right Documents for the questions agents and engineers actually ask. ADR 0008 defers embeddings and reranking until a benchmark shows that lexical search and exact API lookup miss relevant Sections. This file is that benchmark. It has 39 questions in twelve categories, weighted towards the main jobs: generating VBA macros and Python scripts, grounding agents that drive CST through a Control Server, how-to answers, and theory.
+This benchmark checks whether an agent finds the right Documents in the Knowledge Base folder for the questions agents and engineers actually ask. It was first written to tune a search ranker; since ADR 0014 it judges the folder itself: its pages, its entry files and its `AGENTS.md`. It has 39 questions in twelve categories, weighted towards the main jobs: generating VBA macros and Python scripts, grounding agents that drive CST through a Control Server, how-to answers, and theory.
 
 Every expected source was found by hand in `.ingestion/2024/`. Each path, anchor and PDF page was checked mechanically to exist. The "why" lines are written in our own words. No vendor prose is copied.
 
@@ -10,7 +10,7 @@ Every expected source was found by hand in `.ingestion/2024/`. Each path, anchor
 
 `docs/benchmark.toml` holds these questions in the form the agent run uses. This file keeps the reasoning; change a question's sources, Area or text in both.
 
-The benchmark is run by agents, not by a ranker (ADR 0014). For each question, an agent with file tools only (grep, glob, read) is opened in the Knowledge Base folder, reads `AGENTS.md`, and answers the question. Its tool calls are logged.
+The benchmark is run by agents, not by a ranker (ADR 0014). For each question, an agent with file tools only (grep, glob, read) is opened in the Knowledge Base folder, reads `AGENTS.md`, and answers the question. Its tool calls are logged. `scripts/agent-run.py` does this for every scorable question, a question whose Areas are built and that is not scored by hand, and reports the counts below.
 
 - **Hit:** the agent read an expected Document of the question. An Alias of it counts. For a PDF, the page it read must include the given page.
 - **Calls:** the number of tool calls up to and including the first read of an expected Document, counting the `AGENTS.md` read as call 1. Report the distribution and the median.
@@ -467,7 +467,7 @@ Sources here are relative to the corpus root and start with `Library/`. Procedur
 
 ## 12. Not in the documentation
 
-Scored by hand during the agent check, not by retrieval rank.
+Scored by hand during the agent check, not by the agent run.
 
 ### NODOC-01: select the TLM solver from VBA
 - **Question:** Write a macro that switches the project to the TLM solver and sets up a hexahedral TLM mesh.

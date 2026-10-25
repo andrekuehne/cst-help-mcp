@@ -1,15 +1,14 @@
 """The Document model (ADR 0007).
 
-Readers parse each Source into Documents of typed blocks. The model is persisted
-next to each rendered Markdown file, and both the Markdown and the search records
-are rendered from it, never from raw source markup.
+Readers parse each Source into Documents of typed blocks, and the Markdown is rendered
+from them, never from raw source markup. The model is not persisted: a build re-parses.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 BlockKind = Literal[
@@ -87,7 +86,7 @@ class Asset:
     width: int
     height: int
     file: str  # the path in the Collection's tree
-    served: str  # the copy the server returns: the file itself, or its copy scaled for clients
+    served: str  # the file itself, or its copy scaled for clients that limit an image's size
     served_width: int
     served_height: int
     sources: list[str] = field(default_factory=list)  # paths relative to the release folder
@@ -198,7 +197,7 @@ class Document:
     links: list[Link] = field(default_factory=list)
     images: list[ImageRef] = field(default_factory=list)
     aliases: list[str] = field(default_factory=list)  # other source paths of the same Document
-    # The Areas of Aliases published in other projects; searches narrowed to them find the Document.
+    # The Areas of Aliases published in other projects.
     alias_areas: list[str] = field(default_factory=list)
     # Every id and name the source declares, so link fragments are checked beyond Section anchors.
     source_anchors: list[str] = field(default_factory=list)
@@ -211,26 +210,6 @@ class Document:
     breadcrumbs: list[str] = field(default_factory=list)
     generated: bool = False  # written in an agent session, such as a Guide (ADR 0010)
     heuristic: bool = False  # found by the build's heuristics, such as Usages (ADR 0012)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Document:
-        sections = [
-            Section(
-                anchors=s["anchors"],
-                heading_path=s["heading_path"],
-                blocks=[Block(**b) for b in s["blocks"]],
-            )
-            for s in data["sections"]
-        ]
-        entries = [ApiEntry(**e) for e in data["api_entries"]]
-        links = [Link(**link) for link in data["links"]]
-        # Builds from before Assets existed hold no images.
-        images = [ImageRef(**image) for image in data.get("images", [])]
-        fields = {k: v for k, v in data.items() if k not in ("sections", "api_entries", "links", "images")}
-        return cls(**fields, sections=sections, api_entries=entries, links=links, images=images)
 
 
 @dataclass

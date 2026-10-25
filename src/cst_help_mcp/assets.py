@@ -3,11 +3,11 @@
 Images are deduplicated by content hash. PNG and JPEG files are kept as they are; any other format,
 such as BMP, SVG or GIF, is converted to PNG, so every client can display it (an animated GIF keeps
 its first frame). An image longer than CLIENT_EDGE pixels on its long edge also gets a copy scaled
-to that size, which the server returns instead.
+to that size, for clients that cannot take a larger one.
 
     <tree>/assets/<id>.png|jpg          the Asset
     <tree>/assets/<id>.1568.png|jpg     its copy scaled for clients, where it needs one
-    <tree>/assets/assets.json           every Asset's kind, caption, size, sources and Documents
+    <build>/assets.json                 every Asset's kind, caption, size, sources and Documents
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import io
 import re
-from dataclasses import asdict
 from pathlib import Path, PurePosixPath
 
 import resvg_py
@@ -25,7 +24,7 @@ from cst_help_mcp import layout
 from cst_help_mcp.links import ReleaseFiles, SourceLink
 from cst_help_mcp.model import Asset, AssetKind, Document, ImageRef
 
-CLIENT_EDGE = 1568  # the longest edge of an image the server returns
+CLIENT_EDGE = 1568  # the longest edge of an image a client takes
 FOLDER = layout.ASSETS_DIR
 _ICON_EDGE = 32  # an image no longer than this on either edge is an icon
 _ID_LENGTH = 12  # hex digits of the content hash
@@ -38,7 +37,7 @@ def write_assets(
 ) -> tuple[list[Asset], list[SourceLink]]:
     """Write the Asset of every image the Documents show into the tree, and point their images at them.
 
-    Returns the Assets, and the images whose file is missing or unreadable.
+    Returns the Assets, for the Build's list of them, and the images whose file is missing or unreadable.
     """
     folder = tree / FOLDER
     folder.mkdir(parents=True, exist_ok=True)
@@ -69,7 +68,6 @@ def write_assets(
             asset = by_path[image.src.lower()]
             if asset is not None:
                 _attach_asset(image, asset)
-    layout.write_json(tree / layout.ASSETS_INDEX, [asdict(asset) for asset in assets])
     return assets, missing
 
 

@@ -14,8 +14,4 @@ class BuildError(CstHelpError):
 
 
 class KnowledgeBaseError(CstHelpError):
-    """The Knowledge Base is missing or doesn't hold the requested Release or Area."""
-
-
-class BenchmarkError(CstHelpError):
-    """The benchmark file is malformed, or a query log can't be read."""
+    """The Knowledge Base is missing or doesn't hold the requested Release."""

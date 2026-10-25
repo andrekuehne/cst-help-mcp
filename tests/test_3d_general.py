@@ -1,4 +1,4 @@
-"""Build the 3D Simulation and General Areas from the real corpus, then query them (the build-then-query seam)."""
+"""Build the 3D Simulation and General Areas from the real corpus, then read the files it wrote."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import re
 
 from kb_helpers import ProseBuild
 
-from cst_help_mcp.retrieval import KnowledgeBase
+from cst_help_mcp.validate import validate
 
 BRICK = "3d/common_struct/common_struct_brick.htm.md"
 POLARIZATION = "3d/special_theory/special_theory_polarization.htm.md"
@@ -55,26 +55,11 @@ def test_the_navigation_boilerplate_is_left_out(prose_build: ProseBuild) -> None
     assert "\n\n\n" not in md
 
 
-def test_the_brick_dialog_page_is_found_by_search(prose_kb: KnowledgeBase) -> None:
-    hits = prose_kb.search("brick dimensions expressions coordinate system", areas=["3d"])
-
-    assert BRICK in [h.locator.partition("#")[0] for h in hits[:3]]
-    # Search records hold the link labels, not their Locators.
-    assert all("common_general_expression" not in h.snippet for h in hits)
-
-
 def test_the_polarization_theory_page_keeps_its_text_and_tex(prose_build: ProseBuild) -> None:
     md = _md(prose_build, POLARIZATION)
 
     assert "# Polarization\n\nElectromagnetic waves are transversal waves." in md
     assert r"\begin{equation} \vec{E} = \left(\begin{array}{c} e_1 \\ e_2 \\ 0 \end{array}\right)" in md
-
-
-def test_the_polarization_theory_page_is_found_by_search(prose_kb: KnowledgeBase) -> None:
-    hits = prose_kb.search("left circular polarization IEEE convention")
-
-    assert hits[0].locator == POLARIZATION
-    assert hits[0].area == "3d"
 
 
 def test_subheadings_open_sections_and_back_to_top_links_are_dropped(prose_build: ProseBuild) -> None:
@@ -150,25 +135,25 @@ def test_external_links_keep_their_url_and_links_outside_the_corpus_their_label(
     assert "mergedprojects/pcb" not in family.lower()
 
 
-def test_topics_outside_any_table_of_contents_are_included(prose_kb: KnowledgeBase) -> None:
+def test_topics_outside_any_table_of_contents_are_included(prose_build: ProseBuild) -> None:
     # No ribbon topic appears in a table of contents (research §3.1).
-    hits = prose_kb.search("modeling ribbon", areas=["general"])
+    frontmatter = _md(prose_build, MODELING_RIBBON).partition("\n---\n")[0]
 
-    assert MODELING_RIBBON in [h.locator.partition("#")[0] for h in hits]
+    assert "\ntoc_paths:" not in frontmatter
 
 
 def test_ribbon_topics_copied_into_the_3d_project_are_aliases_of_the_general_ones(
-    prose_build: ProseBuild, prose_kb: KnowledgeBase
+    prose_build: ProseBuild,
 ) -> None:
     md = _md(prose_build, MODELING_RIBBON)
 
     assert 'area: "general"' in md
+    assert 'alias_areas: ["3d"]\n' in md
     assert '"Online Help/mergedProjects/3D/common_ribbons/3d/common_ribbons_modeling.htm"' in md
     assert not (prose_build.tree / "3d/common_ribbons/3d/common_ribbons_modeling.htm.md").exists()
     # A link to the 3D copy reaches the Document (the Brick dialog's ribbon path).
     assert "## ![shape brick icon](assets/" in _md(prose_build, BRICK)
     assert f" [Modeling:]({MODELING_RIBBON}) Shapes > Brick\n" in _md(prose_build, BRICK)
-    assert len({h.locator for h in prose_kb.search("Modeling ribbon")} & {MODELING_RIBBON}) <= 1
     assert prose_build.report["counts"]["aliases"] > 10
 
 
@@ -187,26 +172,10 @@ def test_the_report_counts_links_by_status_and_lists_the_unresolved_ones(prose_b
     assert report["counts"]["unresolved_links"] == len(report["unresolved_links"]) < 20
 
 
-def test_the_python_menu_topics_at_the_help_root_belong_to_general(prose_kb: KnowledgeBase) -> None:
+def test_the_python_menu_topics_at_the_help_root_belong_to_general(prose_build: ProseBuild) -> None:
     # Neither loads whtopic.js, which marks the other topics.
-    apps = prose_kb.search("CST Apps python wheel repo", areas=["general"])
-    scripts = prose_kb.search("user scripts library directories update", areas=["general"])
-
-    assert apps[0].locator == "menu.htm.md"
-    assert scripts[0].locator == "user_scipts.htm.md"
-
-
-def test_a_search_narrowed_to_an_alias_area_finds_the_document(
-    prose_build: ProseBuild, prose_kb: KnowledgeBase
-) -> None:
-    # The Modeling ribbon topic is a General Document, also published in the 3D project.
-    assert 'alias_areas: ["3d"]\n' in _md(prose_build, MODELING_RIBBON)
-    hits = [
-        h for h in prose_kb.search("modeling ribbon", areas=["3d"]) if h.locator.startswith(MODELING_RIBBON)
-    ]
-
-    assert hits
-    assert {h.area for h in hits} == {"general"}
+    for locator in ("menu.htm.md", "user_scipts.htm.md"):
+        assert '\narea: "general"\n' in _md(prose_build, locator)
 
 
 def test_links_to_files_missing_from_the_release_folder_are_unresolved_but_do_not_fail_the_build(
@@ -241,3 +210,7 @@ def test_fragments_that_match_no_anchor_are_listed(prose_build: ProseBuild) -> N
         "href": "Online Help/mergedProjects/3D/common_overview/common_overview_mesh.htm#Mesh_Control_Regions",
     } in report["missing_anchors"]
     assert report["counts"]["missing_anchors"] == len(report["missing_anchors"])
+
+
+def test_every_link_in_the_built_folder_leads_to_a_file_of_it(prose_build: ProseBuild) -> None:
+    assert validate(prose_build.kb).problems == []

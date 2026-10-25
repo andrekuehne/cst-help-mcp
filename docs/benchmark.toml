@@ -1,19 +1,17 @@
-# The retrieval benchmark for the CST Studio Suite 2024 Knowledge Base, in the form the runner scores
-# (`cst-help benchmark`). docs/benchmark-draft.md explains each question: why its sources answer it,
+# The benchmark for the CST Studio Suite 2024 Knowledge Base, in the form the agent run reads
+# (scripts/agent-run.py). docs/benchmark-draft.md explains each question: why its sources answer it,
 # its risks and how it is scored. This file holds no vendor text: questions and short queries are our
 # own words, and sources are source paths, anchors, headings and PDF pages.
 #
 # - `half` splits the questions once into a tuning and a held-out half, stratified by category with a
-#   fixed seed. A weight change counts as better only if the held-out half improves too. A new
-#   question without one falls into a half by a hash of its id; one from the query log is held out.
-# - `areas` is the filter an agent would plausibly use; [] for none.
-# - `sources` are listed best first, with paths relative to the corpus root. The runner maps them to
-#   Locators mechanically (ADR 0011), and a PDF page to its `page-<n>` anchor.
-# - `short` are queries as an agent types them. They are scored next to the full question.
-# - `api_entries`: for API questions, lookup of the first must return the first source.
+#   fixed seed. A build change counts as better only if the held-out half improves too.
+# - `areas` are the Areas whose pages answer the question; [] for none. A question is scored only on
+#   a Knowledge Base where they are built.
+# - `sources` are listed best first, with paths relative to the corpus root. They map to Locators
+#   mechanically (ADR 0011), and a PDF page to its `page-<n>` anchor.
+# - `short` are queries as an agent types them.
+# - `api_entries`: for API questions, the API Entries the answer must name.
 # - `scored = "by hand"` lists a question without scoring it.
-# - `baseline` records ranks among the top 5 hits, unfiltered and filtered to the Areas, "miss" for
-#   none: before ticket 06 ("before-06") and after it ("06"). Search must not fall below the newest.
 # - Ids are never reused. To drop a question, set `confidence = "rejected"`.
 
 [categories]
@@ -29,7 +27,6 @@ EXP = "Example Projects"
 REL = "Release notes"
 LIB = "Library"
 NODOC = "Not in the documentation"
-LOG = "Queries agents sent (cst-help benchmark-drafts)"
 
 # 1. Exact API lookups
 
@@ -174,7 +171,6 @@ areas = ["3d"]
 short = ["time domain solver accuracy", "steady state energy criterion"]
 api_entries = ["Solver.SteadyStateLimit"]
 confidence = "high"
-baseline = { before-06 = [2, "miss"], 06 = [2, "miss"] }
 sources = [
     { path = "Online Help/mergedProjects/3D/special_solvopt/special_solvopt_solver.htm" },
     { path = "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_solver_object.htm", anchor = "TD Steady State", headings = ["SteadyStateLimit"] },
@@ -188,7 +184,6 @@ areas = ["vba-3d"]
 short = ["integral equation solver VBA", "FDSolver SetMethod surface"]
 api_entries = ["FDSolver.SetMethod"]
 confidence = "verify in CST"
-baseline = { before-06 = [1, 1], 06 = [1, 1] }
 sources = [
     { path = "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_fdsolver_object.htm", anchor = "FD Method", headings = ["SetMethod"] },
     { path = "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_iesolver_object.htm", anchor = "IE_General" },
@@ -202,7 +197,6 @@ question = "Can the eigenmode solver handle open boundaries and lossy, dispersiv
 areas = ["3d"]
 short = ["eigenmode solver lossy open boundary", "eigenmode general lossy method"]
 confidence = "high"
-baseline = { before-06 = [4, 3], 06 = [3, 2] }
 sources = [
     { path = "Online Help/mergedProjects/3D/special_overview/special_overview_eigenmodesolverover.htm" },
 ]
@@ -215,7 +209,6 @@ areas = ["vba-3d"]
 short = ["AR filter VBA", "UseArfilter"]
 api_entries = ["Solver.UseArfilter"]
 confidence = "high"
-baseline = { before-06 = [1, 1], 06 = [3, 1] }
 sources = [
     { path = "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_solver_object.htm", anchor = "TD AR-Filter", headings = ["UseArfilter"] },
     { path = "Online Help/mergedProjects/3D/special_overview/special_overview_arfilterover.htm", anchor = "Online_AR_Filter" },
@@ -231,7 +224,6 @@ question = "In the discrete port dialog, what's the difference between the S-par
 areas = ["3d"]
 short = ["discrete port impedance", "discrete port type voltage current"]
 confidence = "high"
-baseline = { before-06 = [1, 1], 06 = [1, 1] }
 sources = [
     { path = "Online Help/mergedProjects/3D/special_solvopt/special_solvopt_discreteports.htm" },
     { path = "Online Help/mergedProjects/3D/special_overview/special_overview_discrete_port_overview.htm" },
@@ -244,7 +236,6 @@ question = "For an antenna model, which boundary setting adds free space for the
 areas = ["3d"]
 short = ["open add space boundary", "background distance boundary antenna"]
 confidence = "high"
-baseline = { before-06 = [5, 5], 06 = [4, 4] }
 sources = [
     { path = "Online Help/mergedProjects/3D/special_solvopt/special_solvopt_boundary_conditions_boundaries.htm" },
     { path = "Online Help/mergedProjects/3D/common_general/common_general_background.htm" },
@@ -257,7 +248,6 @@ question = "If I put two parameters into one sequence of the Parameter Sweep dia
 areas = ["3d"]
 short = ["parameter sweep sequence", "parameter sweep combinations"]
 confidence = "high"
-baseline = { before-06 = [1, 1], 06 = [1, 1] }
 sources = [
     { path = "Online Help/mergedProjects/3D/special_process/special_solvopt_parametersweep.htm" },
     { path = "Online Help/mergedProjects/3D/special_process/special_solvopt_parametersweeppar.htm" },
@@ -270,7 +260,6 @@ question = "How do I temporarily switch off a step in the history list without d
 areas = ["3d"]
 short = ["disable history step", "history list hide"]
 confidence = "high"
-baseline = { before-06 = [3, 3], 06 = [1, 1] }
 sources = [
     { path = "Online Help/mergedProjects/3D/common_macro/common_macro_history_list.htm" },
 ]

@@ -1,4 +1,4 @@
-"""`cst-help validate` finds a missing or inconsistent Build, database or file; `assemble` repairs the view."""
+"""`cst-help validate` finds a missing or changed Build, file or link target; `assemble` repairs the view."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from cst_help_mcp.cli import main
 
 SOLVERS = "Online Help/mergedProjects/VBA_3D/special_vbasolver/*"
 EMS_SOLVER = "vba_3d/special_vbasolver/special_vba_ems_solver_object.htm.md"
+FD_SOLVER = "vba_3d/special_vbasolver/special_vbasolver_fdsolver_object.htm.md"
 
 
 @pytest.fixture
@@ -58,25 +59,6 @@ def test_a_missing_pointer_is_reported(kb: Path, capsys: pytest.CaptureFixture[s
     assert "active.json is missing" in out
 
 
-def test_a_missing_database_is_reported(kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    (_only(kb / "assemblies") / "index.sqlite").unlink()
-
-    code, out = _validate(kb, capsys)
-
-    assert code == 1
-    assert "database" in out
-    assert "is missing" in out
-
-
-def test_a_damaged_database_is_reported(kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    (_only(kb / "assemblies") / "index.sqlite").write_bytes(b"not a database" * 100)
-
-    code, out = _validate(kb, capsys)
-
-    assert code == 1
-    assert "damaged" in out
-
-
 def test_a_missing_build_is_reported(kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
     build = _only(kb / "builds" / "cst-2024")
     build.rename(build.with_name("elsewhere"))
@@ -110,23 +92,6 @@ def test_a_changed_or_missing_file_in_a_build_is_reported(
     assert f"tree/{EMS_SOLVER} has changed" in out
 
 
-def test_a_database_that_disagrees_with_its_builds_is_reported(
-    kb: Path, capsys: pytest.CaptureFixture[str], corpus_2024: Path, tmp_path: Path
-) -> None:
-    solver_only = "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_solver_object.htm"
-    config = write_config(tmp_path / "other.toml", tmp_path / "other-kb", corpus_2024, [solver_only])
-    build_collection(config, "cst-2024")
-    # The database of a Knowledge Base built from a narrower part of the Source.
-    (_only(kb / "assemblies") / "index.sqlite").write_bytes(
-        (_only(tmp_path / "other-kb" / "assemblies") / "index.sqlite").read_bytes()
-    )
-
-    code, out = _validate(kb, capsys)
-
-    assert code == 1
-    assert "inconsistent" in out
-
-
 def test_assemble_restores_a_damaged_view(kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
     _writable(kb / "cst-2024" / SOLVER_HF).unlink()
     code, out = _validate(kb, capsys)
@@ -138,3 +103,36 @@ def test_assemble_restores_a_damaged_view(kb: Path, capsys: pytest.CaptureFixtur
 
     code, out = _validate(kb, capsys)
     assert code == 0, out
+
+
+def test_a_link_to_a_missing_page_is_reported(kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    toc = kb / "cst-2024" / "toc.md"
+    toc.write_text(
+        toc.read_text(encoding="utf-8") + "- [Gone](vba_3d/gone.htm.md#somewhere)", encoding="utf-8"
+    )
+
+    code, out = _validate(kb, capsys)
+
+    assert code == 1
+    assert "cst-2024/toc.md links to vba_3d/gone.htm.md, which is missing" in out
+
+
+def test_a_missing_entry_file_is_reported(kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (kb / "cst-2024" / "keywords.md").unlink()
+
+    code, out = _validate(kb, capsys)
+
+    assert code == 1
+    assert "cst-2024/keywords.md is missing; run cst-help assemble to restore it" in out
+
+
+def test_a_page_whose_link_target_is_gone_is_reported_through_the_link_too(
+    kb: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The Solver page links to the FDSolver page.
+    _writable(kb / "cst-2024" / FD_SOLVER).unlink()
+
+    code, out = _validate(kb, capsys)
+
+    assert code == 1
+    assert f"cst-2024/{SOLVER_HF} links to {FD_SOLVER}, which is missing" in out

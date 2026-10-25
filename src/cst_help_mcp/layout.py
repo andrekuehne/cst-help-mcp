@@ -1,13 +1,15 @@
 """Where a Knowledge Base keeps its Builds, assemblies and the active pointer (ADR 0009).
 
-    <kb>/builds/<collection>/<build id>/   one immutable Build: build.json, report.json, navigation.json, tree/
-    <kb>/assemblies/<assembly id>/         one assembled database: assembly.json, index.sqlite
+    <kb>/builds/<collection>/<build id>/   one immutable Build: build.json, report.json, navigation.json,
+                                           assets.json, tree/
+    <kb>/assemblies/<assembly id>/         one assembly: assembly.json, naming the Build of each Collection
     <kb>/active.json                       the pointer to the active assembly, replaced atomically
-    <kb>/<collection>/                     the readable view of the active Build's tree
+    <kb>/<collection>/                     the readable view: the active Build's tree and the entry files
 
 Builds and assemblies are written under a dot-prefixed name and renamed into place once
 finished, so a folder under its final name is always whole. A Build's files are then made
-read-only, and the readable view links to them, so nothing edits a Build in place.
+read-only, and the readable view links to them, so nothing edits a Build in place. Only what
+agents read goes into the tree; the manifest, report and navigation data stay beside it.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from cst_help_mcp.errors import KnowledgeBaseError
-from cst_help_mcp.model import NavTree
+from cst_help_mcp.model import NavNode, NavTree
 
 if sys.platform == "win32":
     import msvcrt
@@ -39,16 +41,15 @@ LOCK_FILE = ".lock"
 BUILD_MANIFEST = "build.json"
 REPORT_FILE = "report.json"
 NAVIGATION_FILE = "navigation.json"
-# Entry files at the root of a Build's tree, listing its navigation trees.
+# Entry files that assembly writes at the root of a readable view, listing its navigation trees.
 ENTRY_FILES: dict[NavTree, tuple[str, str]] = {
     "toc": ("toc.md", "Table of contents"),
     "keywords": ("keywords.md", "Keywords"),
 }
-# The folder of a Build's tree that holds its Assets, and the list of them it holds.
+# The folder of a Build's tree that holds its Assets, and the list of them beside the tree.
 ASSETS_DIR = "assets"
-ASSETS_INDEX = f"{ASSETS_DIR}/assets.json"
+ASSETS_FILE = "assets.json"
 ASSEMBLY_MANIFEST = "assembly.json"
-INDEX_FILE = "index.sqlite"
 TREE = "tree"
 
 
@@ -211,6 +212,13 @@ def active_assembly(kb_path: Path) -> str:
     if not isinstance(assembly, str):
         raise KnowledgeBaseError(f"The Knowledge Base at {kb_path} has a damaged {POINTER_FILE}")
     return assembly
+
+
+def read_navigation(build: Path) -> dict[NavTree, list[NavNode]]:
+    """The navigation trees a Build found; none for a Build without navigation data."""
+    nav_file = build / NAVIGATION_FILE
+    trees: dict[NavTree, list[Any]] = read_json(nav_file) if nav_file.is_file() else {}
+    return {tree: [NavNode.from_dict(n) for n in nodes] for tree, nodes in trees.items()}
 
 
 def assembly_builds(assembly: Path) -> dict[str, str]:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
-import json
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
@@ -26,7 +25,7 @@ from cst_help_mcp.navigation import (
     read_navigation,
     resolve_navigation,
 )
-from cst_help_mcp.render import render_markdown, render_navigation
+from cst_help_mcp.render import render_markdown
 from cst_help_mcp.robohelp import PROSE, VBA, Profile, is_topic, read_topic
 
 
@@ -182,8 +181,9 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
     with layout.staged(final) as staging:
         assets, report.missing_assets = write_assets(staging / layout.TREE, docs, files)
         report.assets = len(assets)
+        layout.write_json(staging / layout.ASSETS_FILE, [asdict(asset) for asset in assets])
         _write_tree(staging / layout.TREE, docs)
-        _write_navigation(staging, collection.release, navigation)
+        _write_navigation(staging, navigation)
         layout.write_json(staging / layout.REPORT_FILE, report.to_dict())
         manifest = layout.BuildManifest(
             collection=collection.name,
@@ -297,24 +297,17 @@ def _merge_aliases(docs: list[Document]) -> list[Document]:
 
 
 def _write_tree(tree: Path, docs: list[Document]) -> None:
-    """Write each Document's Markdown with its persisted model next to it."""
+    """Write each Document's Markdown; the model itself is not kept (ADR 0014)."""
     tree.mkdir(parents=True, exist_ok=True)
     for doc in docs:
         md = tree / doc.locator
         md.parent.mkdir(parents=True, exist_ok=True)
         md.write_text(render_markdown(doc), encoding="utf-8", newline="\n")
-        model = md.with_name(md.name + ".json")
-        model.write_text(json.dumps(doc.to_dict(), ensure_ascii=False, indent=1), encoding="utf-8")
 
 
-def _write_navigation(build: Path, release: str, navigation: Navigation) -> None:
-    """Write the navigation trees for assembly, and the entry files that list them in the tree."""
-    trees = navigation.trees()
+def _write_navigation(build: Path, navigation: Navigation) -> None:
+    """Write the navigation trees beside the tree, for assembly to render as entry files."""
     layout.write_json(
         build / layout.NAVIGATION_FILE,
-        {tree: [node.to_dict() for node in nodes] for tree, nodes in trees.items()},
+        {tree: [node.to_dict() for node in nodes] for tree, nodes in navigation.trees().items()},
     )
-    for tree, nodes in trees.items():
-        name, title = layout.ENTRY_FILES[tree]
-        entry_file = build / layout.TREE / name
-        entry_file.write_text(render_navigation(release, title, nodes), encoding="utf-8", newline="\n")

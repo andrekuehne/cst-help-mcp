@@ -18,7 +18,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,7 +25,6 @@ import pytest
 from kb_helpers import PROJECTS, VBA_3D, VBA_OVERVIEW, ProseBuild, write_config
 
 from cst_help_mcp.build import build_collection
-from cst_help_mcp.retrieval import KnowledgeBase
 
 RELEASE = "2024"
 CORPUS_ENV = f"CST_HELP_CORPUS_{RELEASE}"
@@ -131,12 +129,6 @@ def vba_kb(corpus_2024: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture(scope="session")
-def kb(vba_kb: Path) -> Iterator[KnowledgeBase]:
-    with KnowledgeBase.open(vba_kb, release=RELEASE) as knowledge_base:
-        yield knowledge_base
-
-
-@pytest.fixture(scope="session")
 def prose_build(corpus_2024: Path, tmp_path_factory: pytest.TempPathFactory) -> ProseBuild:
     """The 3D Simulation and General Areas, built once per test session in a temporary folder."""
     root = tmp_path_factory.mktemp("prose-kb")
@@ -148,19 +140,3 @@ def prose_build(corpus_2024: Path, tmp_path_factory: pytest.TempPathFactory) -> 
     result = build_collection(config, "cst-2024")
     report = json.loads(result.report_path.read_text(encoding="utf-8"))
     return ProseBuild(root / "kb", root / "kb" / "cst-2024", report)
-
-
-@pytest.fixture(scope="session")
-def prose_kb(prose_build: ProseBuild) -> Iterator[KnowledgeBase]:
-    with KnowledgeBase.open(prose_build.kb, release=RELEASE) as knowledge_base:
-        yield knowledge_base
-
-
-@pytest.fixture(scope="session")
-def release_kb(corpus_2024: Path, tmp_path_factory: pytest.TempPathFactory) -> Iterator[KnowledgeBase]:
-    """Every Area the build reads so far, built once per test session in a temporary folder."""
-    root = tmp_path_factory.mktemp("release-kb")
-    config = write_config(root / "cst-help.toml", root / "kb", corpus_2024, [])
-    build_collection(config, "cst-2024")
-    with KnowledgeBase.open(root / "kb", release=RELEASE) as knowledge_base:
-        yield knowledge_base

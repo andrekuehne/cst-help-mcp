@@ -1,4 +1,4 @@
-"""Navigation metadata: table-of-contents paths, author keywords, the entry files and browsing.
+"""Navigation metadata: table-of-contents paths, author keywords and the entry files.
 
 The real corpus exercises all of it except breadcrumbs, which only fill gaps in projects no Area
 reads yet; one small synthetic release covers those.
@@ -10,12 +10,9 @@ import json
 import re
 from pathlib import Path
 
-import pytest
 from kb_helpers import SOLVER_HF, VBA_3D, ProseBuild, write_config, write_release
 
 from cst_help_mcp.build import build_collection
-from cst_help_mcp.errors import KnowledgeBaseError
-from cst_help_mcp.retrieval import KnowledgeBase
 
 IMPORT_SUB_PROJECT = "3d/common_tools/common_tools_importsubproject.htm.md"
 
@@ -163,64 +160,3 @@ def test_the_report_counts_navigation_entries(prose_build: ProseBuild) -> None:
     assert navigation["toc_entries_dropped"] > 300
     assert navigation["keyword_topics_dropped"] > 500
     assert navigation["context_ids"] > 0
-
-
-def test_browsing_a_book_of_the_table_of_contents_lists_its_pages(prose_kb: KnowledgeBase) -> None:
-    result = prose_kb.browse("3D Simulation > Solvers > High Frequency > Time Domain Solver")
-
-    assert result.path == ["3D Simulation", "Solvers", "High Frequency", "Time Domain Solver"]
-    assert [(e.name, e.locator, e.children) for e in result.entries] == [
-        ("Time Domain Solver Overview", "3d/special_overview/special_overview_fdtd_overview.htm.md", 0),
-        ("Time Domain Solver Settings", "3d/special_overview/special_overview_tsolver.htm.md", 0),
-        ("Signals in Time Domain Simulations", "3d/special_overview/special_overview_signalsfdtd.htm.md", 0),
-        (
-            "Time Domain Solver Performance Improvements",
-            "3d/special_overview/transient_solver_performance_improvements.htm.md",
-            0,
-        ),
-    ]
-
-
-def test_browse_paths_ignore_case_and_spacing_and_books_report_their_size(prose_kb: KnowledgeBase) -> None:
-    result = prose_kb.browse("3d simulation>solvers >  HIGH frequency")
-
-    books = {e.name: e for e in result.entries}
-    assert books["Time Domain Solver"].locator is None
-    assert books["Time Domain Solver"].children == 4
-    # A book that is a Document of its own.
-    assert books["EM/Circuit Co-Simulation"].locator == "3d/special_dslink/ds_link.htm.md"
-
-
-def test_browsing_without_a_path_lists_the_top_level(prose_kb: KnowledgeBase) -> None:
-    names = [e.name for e in prose_kb.browse().entries]
-
-    assert names[0] == "Welcome to CST Studio Suite"
-    assert {"Getting Started", "3D Simulation", "Simulation Acceleration"} <= set(names)
-
-
-def test_browsing_a_keyword_lists_its_target_topics(prose_kb: KnowledgeBase) -> None:
-    result = prose_kb.browse("2d colormap", tree="keywords")
-
-    assert result.path == ["2D Colormap"]
-    assert [e.name for e in result.entries] == [
-        "2D Colormap Plot Overview",
-        "Color Map Plot",
-        "2D Colormap Plot",
-    ]
-    assert result.entries[0].locator == "3d/special_postpr/special_postpr_pp_colourmap.htm.md"
-
-
-def test_browsing_a_keyword_with_sub_keywords(prose_kb: KnowledgeBase) -> None:
-    macros = prose_kb.browse("Macros", tree="keywords")
-    coils = prose_kb.browse("Macros > Construct / Coils", tree="keywords")
-
-    assert macros.entries[0].name == "Preloaded Macros Overview"
-    assert {"Construct / Coils": 1}.items() <= {e.name: e.children for e in macros.entries}.items()
-    assert [e.locator for e in coils.entries] == [
-        "3d/common_preloadedmacro/common_preloadedmacro_construct_coils.htm.md"
-    ]
-
-
-def test_browsing_an_unknown_entry_names_the_nearest_ones(prose_kb: KnowledgeBase) -> None:
-    with pytest.raises(KnowledgeBaseError, match="'Solverz'.*Solvers"):
-        prose_kb.browse("3D Simulation > Solverz")

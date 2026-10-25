@@ -1,79 +1,98 @@
-"""Build the VBA 3D Area from the real corpus, then query it (the build-then-query seam)."""
+"""Build the VBA 3D Area from the real corpus, then read the files it wrote (the build-then-read seam)."""
 
 from __future__ import annotations
 
-import json
+import re
 from pathlib import Path
 
 from kb_helpers import SOLVER_HF
 
 VBA_OVERVIEW = "vba/vba_macro_language_overview.htm.md"
-
-from cst_help_mcp.retrieval import KnowledgeBase
-
-
-def test_lookup_returns_signature_description_and_locator(kb: KnowledgeBase) -> None:
-    hits = kb.lookup("Solver.FrequencyRange")
-
-    hf = [h for h in hits if h.locator == f"{SOLVER_HF}#frequencyrange"]
-    assert len(hf) == 1
-    entry = hf[0]
-    assert entry.area == "vba-3d"
-    assert entry.release == "2024"
-    assert entry.qualified_name == "Solver.FrequencyRange"
-    assert entry.signature == "FrequencyRange ( double fmin, double fmax )"
-    assert entry.description.startswith("Sets the frequency range for the simulation.")
-    assert "results will be deleted" in entry.description
+EMS_SOLVER = "vba_3d/special_vbasolver/special_vba_ems_solver_object.htm.md"
+APPLICATION = "vba_3d/common_vbaapp/common_vbaappapplication_object.htm.md"
+MATERIAL = "vba_3d/special_vbalayer/special_vbalayerolayer_object.htm.md"
+SOLID = "vba_3d/common_vbasolido/common_vbasolido_solid_object.htm.md"
+COLOUR_MAP = "vba_3d/common_vbaplot/colourmapplot_object.htm.md"
+MQS_SOLVER = "vba_3d/special_vbatransientsolvers/special_vbatransientsolvers_mqstdsolver_object.htm.md"
 
 
-def test_lookup_ignores_case(kb: KnowledgeBase) -> None:
-    hits = kb.lookup("solver.frequencyrange")
-
-    assert f"{SOLVER_HF}#frequencyrange" in [h.locator for h in hits]
+def _md(kb: Path, locator: str) -> str:
+    return (kb / "cst-2024" / locator).read_text(encoding="utf-8")
 
 
-def test_bare_member_name_returns_every_object_that_has_it(kb: KnowledgeBase) -> None:
-    names = {h.qualified_name for h in kb.lookup("FrequencyRange")}
-
-    assert {"Solver.FrequencyRange", "Monitor.FrequencyRange", "TOUCHSTONE.FrequencyRange"} <= names
-    assert "MeshAdaption3D.SetFrequencyRange" not in names
+def _member(name: str) -> re.Pattern[str]:
+    """A member heading, as the identifier recipe of AGENTS.md greps for it."""
+    return re.compile(rf"^### {re.escape(name)}( / .*)?$", re.MULTILINE)
 
 
-def test_same_titled_solver_pages_stay_distinct(kb: KnowledgeBase) -> None:
-    hits = kb.lookup("Solver")
+def test_a_member_is_an_anchored_heading_with_its_signature_and_description(vba_kb: Path) -> None:
+    md = _md(vba_kb, SOLVER_HF)
 
-    assert {h.locator for h in hits} == {
-        f"{SOLVER_HF}#solver",
-        "vba_3d/special_vbasolver/special_vba_ems_solver_object.htm.md#solver",
+    assert (
+        '<a id="frequencyrange"></a>\n### FrequencyRange\n\n```vba\nFrequencyRange ( double fmin, double fmax )\n'
+        "```\n\nSets the frequency range for the simulation."
+    ) in md
+    assert "all previous simulation results will be deleted" in md
+
+
+def test_a_member_heading_grep_finds_every_object_that_has_it(vba_kb: Path) -> None:
+    pages = {
+        p.relative_to(vba_kb / "cst-2024").as_posix()
+        for p in (vba_kb / "cst-2024" / "vba_3d").rglob("*.md")
+        if _member("FrequencyRange").search(p.read_text(encoding="utf-8"))
     }
-    assert {h.signature for h in hits} == {"Solver Object (HF)", "Solver Object (LF)"}
+
+    assert {
+        SOLVER_HF,
+        "vba_3d/special_vbamonitors/special_vbamonitors_monitor_object.htm.md",
+        "vba_3d/special_vbaimpexp/special_vbaimp_exp_touchstone.htm.md",
+    } <= pages
+    # MeshAdaption3D has SetFrequencyRange, which is another member.
+    assert not any("meshadaption" in p for p in pages)
 
 
-def test_application_methods_resolve_by_bare_name(kb: KnowledgeBase) -> None:
-    hits = kb.lookup("AddToHistory")
-
-    assert [h.qualified_name for h in hits] == ["Project.AddToHistory"]
-    assert hits[0].locator.startswith("vba_3d/common_vbaapp/common_vbaappapplication_object.htm.md#")
-
-
-def test_member_headings_are_recognised_whatever_the_class_case(kb: KnowledgeBase) -> None:
-    hits = kb.lookup("Material.SpecificHeat")
-
-    assert [h.signature for h in hits] == ["SpecificHeat ( double dValue, string unit )"]
+def test_same_titled_solver_pages_stay_distinct(vba_kb: Path) -> None:
+    assert '\ntitle: "Solver Object"\n' in _md(vba_kb, SOLVER_HF)
+    assert '\ntitle: "Solver Object"\n' in _md(vba_kb, EMS_SOLVER)
+    assert '<a id="solver"></a>\n# Solver Object (HF)\n' in _md(vba_kb, SOLVER_HF)
+    assert '<a id="solver"></a>\n# Solver Object (LF)\n' in _md(vba_kb, EMS_SOLVER)
 
 
-def test_multi_name_headings_are_split_into_one_entry_per_name(kb: KnowledgeBase) -> None:
-    hits = kb.lookup("ColourMapPlot.SetYRange")
+def test_application_methods_are_members_of_the_application_object(vba_kb: Path) -> None:
+    assert _member("AddToHistory").search(_md(vba_kb, APPLICATION))
 
-    assert [h.signature for h in hits] == ["SetYRange ( double min, double max )"]
-    assert hits[0].locator.endswith("#setyrange")
-    assert kb.lookup("ColourMapPlot.SetXRange")[0].locator.endswith("#setxrange")
+
+def test_member_headings_are_recognised_whatever_the_class_case(vba_kb: Path) -> None:
+    assert "### SpecificHeat\n\n```vba\nSpecificHeat ( double dValue, string unit )\n```" in _md(
+        vba_kb, MATERIAL
+    )
+
+
+def test_multi_name_headings_get_an_anchor_per_name(vba_kb: Path) -> None:
+    md = _md(vba_kb, COLOUR_MAP)
+
+    assert (
+        '<a id="setxrange"></a>\n<a id="setyrange"></a>\n### SetXRange / SetYRange\n\n'
+        "```vba\nSetXRange ( double min, double max )\nSetYRange ( double min, double max )\n```"
+    ) in md
+
+
+def test_signatures_wrapped_over_two_heading_lines_are_joined(vba_kb: Path) -> None:
+    assert (
+        "```vba\nSetMeshRefinement ( solidname solid1, bool edgeRefine, double edgeRefineFact,"
+        " bool volumeRefine, double volumeRefineFact )\n```"
+    ) in _md(vba_kb, SOLID)
+
+
+def test_prose_styled_as_a_member_heading_stays_prose(vba_kb: Path) -> None:
+    md = _md(vba_kb, MQS_SOLVER)
+
+    assert "\nSpecifies the duration of the simulation.\n" in md
+    assert not _member("Specifies").search(md)
 
 
 def test_code_samples_render_as_fenced_blocks_that_keep_indentation(vba_kb: Path) -> None:
-    md = (vba_kb / "cst-2024/vba_3d/common_vbacablestudio/cablebundles/bundlerename.htm.md").read_text(
-        encoding="utf-8"
-    )
+    md = _md(vba_kb, "vba_3d/common_vbacablestudio/cablebundles/bundlerename.htm.md")
 
     assert (
         '```vba\nWith CableStudio\n    .Reset\n    .InputName "CSBundle", "OldName", "R5_Bundle_1_1"\n'
@@ -81,9 +100,8 @@ def test_code_samples_render_as_fenced_blocks_that_keep_indentation(vba_kb: Path
     assert '    .Execute "BundleRename"\nEnd With\n```' in md
 
 
-def test_markdown_has_frontmatter_and_the_model_is_persisted_next_to_it(vba_kb: Path) -> None:
-    md_path = vba_kb / "cst-2024" / SOLVER_HF
-    md = md_path.read_text(encoding="utf-8")
+def test_markdown_has_frontmatter_and_no_model_beside_it(vba_kb: Path) -> None:
+    md = _md(vba_kb, SOLVER_HF)
 
     assert md.startswith(
         "---\n"
@@ -93,85 +111,18 @@ def test_markdown_has_frontmatter_and_the_model_is_persisted_next_to_it(vba_kb: 
         'source: "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_solver_object.htm"\n'
         'toc_paths: ["Automation and Scripting > '
     )
-    model = json.loads(md_path.with_name(md_path.name + ".json").read_text(encoding="utf-8"))
-    assert model["locator"] == SOLVER_HF
-    assert model["area"] == "vba-3d"
-    assert "Solver.FrequencyRange" in [e["qualified_name"] for e in model["api_entries"]]
+    assert not (vba_kb / "cst-2024" / f"{SOLVER_HF}.json").exists()
 
 
 def test_navigation_boilerplate_is_left_out(vba_kb: Path) -> None:
-    md = (vba_kb / "cst-2024" / SOLVER_HF).read_text(encoding="utf-8")
+    md = _md(vba_kb, SOLVER_HF)
 
     for boilerplate in ("ds_simulia", "3dexp", "addTocInfo", "CST Studio Suite 2024", "General Methods\n- "):
         assert boilerplate not in md
 
 
-def test_benchmark_api_01_resolves_through_lookup(kb: KnowledgeBase) -> None:
-    """API-01: "set the solver frequency range to 1–10 GHz" → `Solver.FrequencyRange`."""
-    hits = kb.lookup("Solver.FrequencyRange")
-
-    top_sources = [h.source_path for h in hits[:5]]
-    assert (
-        "Online Help/mergedProjects/VBA_3D/special_vbasolver/special_vbasolver_solver_object.htm"
-        in top_sources
-    )
-
-
-def test_search_finds_vba_topics_by_plain_words(kb: KnowledgeBase) -> None:
-    hits = kb.search("results deleted when the frequency range changes")
-
-    assert f"{SOLVER_HF}#frequencyrange" in [h.locator for h in hits]
-    assert all(h.area == "vba-3d" and h.release == "2024" for h in hits)
-
-
-def test_search_never_fails_on_punctuation(kb: KnowledgeBase) -> None:
-    assert kb.search('Solver.FrequencyRange( "1" ) AND OR NEAR* $') is not None
-
-
-def test_signatures_wrapped_over_two_heading_lines_are_joined(kb: KnowledgeBase) -> None:
-    hits = kb.lookup("Solid.SetMeshRefinement")
-
-    assert [h.signature for h in hits] == [
-        (
-            "SetMeshRefinement ( solidname solid1, bool edgeRefine, double edgeRefineFact,"
-            " bool volumeRefine, double volumeRefineFact )"
-        )
-    ]
-    assert kb.lookup("bool") == []
-
-
-def test_prose_styled_as_a_member_heading_is_not_an_api_entry(kb: KnowledgeBase) -> None:
-    assert kb.lookup("Specifies") == []
-    assert "Specifies the duration of the simulation." in "\n".join(
-        h.snippet for h in kb.search("duration of the simulation", areas=["vba-3d"])
-    )
-
-
-def test_pages_without_members_do_not_become_api_entries(kb: KnowledgeBase) -> None:
-    assert kb.lookup("Home") == []
-
-
-def test_objects_whose_heading_lacks_the_object_suffix_still_qualify_their_members(
-    kb: KnowledgeBase,
-) -> None:
-    hits = kb.lookup("DopingDensityFieldImport.Reset")
-
-    assert len(hits) == 1
-    assert kb.lookup("Reset") and all("." in h.qualified_name for h in kb.lookup("Reset"))
-
-
-def test_application_object_methods_resolve_under_application_too(kb: KnowledgeBase) -> None:
-    hits = kb.lookup("Application.AddToHistory")
-
-    assert [h.qualified_name for h in hits] == ["Project.AddToHistory"]
-
-
-def test_the_root_vba_overview_belongs_to_the_vba_3d_area(vba_kb: Path, kb: KnowledgeBase) -> None:
-    md = (vba_kb / "cst-2024" / VBA_OVERVIEW).read_text(encoding="utf-8")
-
-    assert md.startswith(
+def test_the_root_vba_overview_belongs_to_the_vba_3d_area(vba_kb: Path) -> None:
+    assert _md(vba_kb, VBA_OVERVIEW).startswith(
         '---\nrelease: "2024"\narea: "vba-3d"\ntitle: "VBA Overview"\n'
         'source: "Online Help/vba/vba_macro_language_overview.htm"\n'
     )
-    hits = kb.search("macro editor debugger OLE automation", areas=["vba-3d"])
-    assert VBA_OVERVIEW in [h.locator.partition("#")[0] for h in hits[:3]]
