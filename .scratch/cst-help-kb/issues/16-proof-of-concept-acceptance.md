@@ -7,7 +7,7 @@
 **Status:** ready-for-agent
 
 - [x] The full slice builds without errors, and the build report is reviewed.
-- [ ] The agent run (ticket 29) covers every question whose Areas are built, from the generated `AGENTS.md`. Every question reaches an expected Document. The per-question counts are recorded in this ticket, per half and per category, and the thresholds in `docs/benchmark-draft.md` are confirmed or adjusted from them.
+- [x] The agent run (ticket 29) covers every question whose Areas are built, from the generated `AGENTS.md`. Every question reaches an expected Document. The per-question counts are recorded in this ticket, per half and per category, and the thresholds in `docs/benchmark-draft.md` are confirmed or adjusted from them.
 - [ ] Manual checks in Claude Code and in Cursor from a session opened in the folder: an identifier, a how-to, a figure (visible to the model from disk), and NODOC-01, where the agent says the item is not documented.
 - [x] The verify-in-CST items are checked or recorded as open: API-05, API-10, SOL-02, and whether `'#include` resolves for code sent through `add_to_history`.
 
@@ -82,3 +82,5 @@ Criterion 4. Recorded as open. They need CST, which this run did not have:
 - API-10: whether two `add_to_history` calls with the same header keep both history blocks.
 - SOL-02: whether the integral equation solver is started through `FDSolver` (`SetMethod`) or `IESolver`.
 - Whether `'#include` resolves for code sent through `add_to_history`.
+
+**2026-10-25, criterion 2.** The user ruled REL-01 an inappropriate test for this ticket: it needs the Release Notes, one of the PDFs left to ticket 21, and is not a question about the slice. With it out, every question the slice covers reached an expected Document (26 of 26, median 3, maximum 5), which ticks criterion 2. REL-01 is scored again once ticket 21 builds the Release Notes. The ticket stays open on criterion 3, the manual checks in Claude Code and Cursor.
