@@ -55,8 +55,8 @@ An image or other non-text file that a Document references.
 _Avoid_: attachment, resource
 
 **API Entry**:
-One documented VBA object, method or property, or Python class, function or method, addressable by its Area and qualified name. The same qualified name can exist in several Areas, as with the VBA `Solver` object.
-_Avoid_: symbol, command, keyword
+One documented VBA object, method or property, Python class, function or method, or WinWrap Basic keyword or built-in function (`Left$`, `Begin Dialog`), addressable by its Area and qualified name. The same qualified name can exist in several Areas, as with the VBA `Solver` object.
+_Avoid_: symbol, command
 
 **Locator**:
 The single address of a Document or Section, a path into the Knowledge Base's files, with an anchor for a Section.

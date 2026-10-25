@@ -8,6 +8,11 @@ import re
 from dataclasses import dataclass, replace
 
 from cst_help_mcp.layout import ApiLine
+
+# The start of a line that Markdown reads as a block: a bullet, a heading or a quote, or the number
+# of an ordered list item, whose "." or ")" is what gets escaped.
+_BLOCK_MARKER = re.compile(r"(?:[-+*>]|#{1,6})(?=\s|$)")
+_LIST_NUMBER = re.compile(r"\d{1,9}(?=[.)](?:\s|$))")
 from cst_help_mcp.model import (
     Block,
     Document,
@@ -152,7 +157,7 @@ def _block(block: Block, links: list[Link], images: list[ImageRef]) -> list[tupl
         case "heading":
             return [(f"{'#' * block.level} {inline(block.text)}", [block.text])]
         case "paragraph" | "figure":
-            return [(inline(block.text), [block.text])]
+            return [(_unmarked(inline(block.text)), [block.text])]
         case "list":
             return [(f"- {inline(item)}", [item]) for item in block.items]
         case "note":
@@ -171,6 +176,15 @@ def _block(block: Block, links: list[Link], images: list[ImageRef]) -> list[tupl
                 return list(zip(rows, [[], *block.rows, []], strict=True))
             rows = _table([[inline(c) for c in r] for r in block.rows])
             return list(zip(rows, [block.rows[0], [], *block.rows[1:]], strict=True))
+
+
+def _unmarked(line: str) -> str:
+    """A paragraph line whose start Markdown would read as a list, heading or quote marker, escaped,
+    such as WinWrap's unary minus ``- n1 Negate n1``."""
+    if _BLOCK_MARKER.match(line):
+        return f"\\{line}"
+    number = _LIST_NUMBER.match(line)
+    return f"{line[: number.end()]}\\{line[number.end() :]}" if number else line
 
 
 def _href(link: Link) -> str | None:

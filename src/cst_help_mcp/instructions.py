@@ -58,6 +58,10 @@ FOLDERS = {
     "3d": "3D simulation: solver dialogs, overviews, theory, post-processing, modelling",
     "vba_3d": "VBA object reference: one page per object, one `###` heading per member",
     "vba": "Overview of the VBA macro language",
+    "sax_basic": (
+        "WinWrap Basic language reference: the macro language's keywords and built-in functions "
+        "(`Dir$`, `Open`, `Print #`, `Format$`, `MsgBox`), one page each"
+    ),
     "general": "Product overview and general features",
     "userinterface": "The main window and its dialogs",
     "ribbons": "The ribbon pages",
@@ -89,6 +93,11 @@ ANATOMY = """\
   `special_vba<topic>/..._object.htm.md` is one VBA object (for example
   `special_vbasolver/special_vbasolver_solver_object.htm.md` is the `Solver` object), and
   `common_vbaapp/` holds the application-level objects.
+- WinWrap Basic pages under `sax_basic/`: file names are numbers (`ww_00069.htm.md`), so find a
+  keyword by its title, `^title: "Dir\\$ Function`, or in `api.md`. Each has the syntax in a
+  ```vba block, its `**Group**`, the description, `## Parameter Description` and `## Example`.
+  `ww_00003.htm.md` lists the keywords by group. The operators (`Mod`, `And`, `Xor`, `^`) share
+  one page, `ww_00179.htm.md`, and are not in `api.md`.
 - Folder names in `3d/` say what a page is: `special_solvopt_*` solver and setup dialogs,
   `special_overview_*` overviews, `special_theory_*` theory, `special_postpr_*` post-processing,
   `special_process_*` parameter sweeps and optimisation, `common_*` shared across products."""
@@ -99,6 +108,10 @@ RECIPES = """\
 its dot and a trailing space, `.FrequencyRange `, to see every object that has it. Or grep the
 member as a heading, case-insensitively, in `vba_3d/`: `^### FrequencyRange`. For an object,
 grep its title: `^title: "Solver Object`. Then read the page or the heading's section.
+
+**A macro language keyword or built-in** (`Left$`, `Open`, `Print #`, file and string handling,
+`MsgBox`, dialogs): grep `api.md` for it, or the titles in `sax_basic/`. These are not CST objects;
+they are the WinWrap Basic language that every macro is written in.
 
 **A concept or how-to question**: work from the vendor's own vocabulary outward.
 1. Grep `keywords.md` for your main noun, case-insensitively. The index terms are the authors'
@@ -130,15 +143,17 @@ def rules(folders: list[ReleaseFolder]) -> str:
     release = folders[0].release
     if any("library" in f.pages for f in folders):
         documented = f"""\
-- If an identifier is in no page under `vba_3d/` and nowhere in `library/`, say it is not
-  documented in Release {release}. Never invent a method, its arguments or its behaviour.
+- If an identifier is in no page under `vba_3d/` or `sax_basic/` and nowhere in `library/`,
+  say that it is not documented in Release {release}. Never invent a method, its arguments or
+  its behaviour.
 - A member that code in `library/` uses but no page documents is an Undocumented Member: use it
   only knowingly, and say that it is one."""
     else:
         documented = f"""\
-- If an identifier is in no page under `vba_3d/`, say it is not documented in Release {release}.
-  Never invent a method, its arguments or its behaviour. This folder holds no Library, so there
-  is no Undocumented Member (one that Library code uses but no page documents) to find."""
+- If an identifier is in no page under `vba_3d/` or `sax_basic/`, say that it is
+  not documented in Release {release}. Never invent a method, its arguments or its behaviour.
+  This folder holds no Library, so there is no Undocumented Member (one that Library code uses
+  but no page documents) to find."""
     return f"""\
 - **Grep finds pages; it never answers.** Before you answer, open every page you cite with your
   read tool, even when the grep lines already seem to hold the answer. A snippet leaves out the

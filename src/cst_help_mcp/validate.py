@@ -15,6 +15,8 @@ from cst_help_mcp.errors import KnowledgeBaseError
 _MARKDOWN_TARGET = re.compile(r"\]\((?:<([^>]+)>|([^)\s]+))\)")
 _HTML_TARGET = re.compile(r'<(?:a\s[^>]*?href|img\s[^>]*?src)="([^"]*)"')
 _FENCED = re.compile(r"^(`{3,}).*?^\1\s*$", re.MULTILINE | re.DOTALL)
+# Inline code, such as the signature `Left[$](S$, Len)` in api.md, which holds no link.
+_CODE_SPAN = re.compile(r"(`+)[^`\n].*?\1")
 _SCHEME = re.compile(r"[a-z][a-z0-9+.-]*:", re.IGNORECASE)
 
 
@@ -118,7 +120,7 @@ def _check_links(kb_path: Path, view: Path) -> list[str]:
     for page in sorted(view.rglob("*.md")):
         if page.relative_to(view).parts[0] == layout.WORK_DIR:
             continue  # what agents write there is theirs, not the Knowledge Base's
-        text = _FENCED.sub("", page.read_text(encoding="utf-8"))
+        text = _CODE_SPAN.sub("", _FENCED.sub("", page.read_text(encoding="utf-8")))
         targets = [a or b for a, b in _MARKDOWN_TARGET.findall(text)]
         targets += [html.unescape(t) for t in _HTML_TARGET.findall(text)]
         for target in dict.fromkeys(targets):

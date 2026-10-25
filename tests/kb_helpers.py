@@ -11,6 +11,7 @@ BENCHMARK = Path(__file__).resolve().parent.parent / "docs" / "benchmark.toml"
 SOLVER_HF = "vba_3d/special_vbasolver/special_vbasolver_solver_object.htm.md"
 VBA_3D = "Online Help/mergedProjects/VBA_3D"
 VBA_OVERVIEW = "Online Help/vba"
+WINWRAP = "Online Help/sax_basic"
 # The help projects a cst-release Source expects in a release folder.
 PROJECTS = (
     VBA_3D,
@@ -22,6 +23,7 @@ PROJECTS = (
     "Online Help/license",
     "Online Help/simulation_acceleration",
     VBA_OVERVIEW,
+    WINWRAP,
 )
 
 

@@ -144,7 +144,7 @@ def read_topic(
         api_entries=builder.entries,
         links=builder.links,
         images=builder.images,
-        source_anchors=_source_anchors(content),
+        source_anchors=source_anchors(content),
         breadcrumbs=breadcrumbs(html),
     )
 
@@ -162,23 +162,32 @@ def breadcrumbs(html: str) -> list[str]:
 
 def _content_elements(body: Tag) -> list[Tag]:
     """The run of elements between the logo header table and the footer."""
-    children = [c for c in body.children if isinstance(c, Tag)]
+    return [node for node in content_nodes(body) if isinstance(node, Tag)]
+
+
+def content_nodes(body: Tag) -> list[PageElement]:
+    """The run of elements and loose text between the logo header table and the footer."""
+    children = list(body.children)
     start = 0
     for i, child in enumerate(children):
-        if child.name == "table" and child.find("img", src=re.compile(r"ds_simulia\.png$", re.IGNORECASE)):
+        if (
+            isinstance(child, Tag)
+            and child.name == "table"
+            and child.find("img", src=re.compile(r"ds_simulia\.png$", re.IGNORECASE))
+        ):
             start = i + 1
             break
-    content: list[Tag] = []
+    content: list[PageElement] = []
     for child in children[start:]:
-        if child.name == "div" and child.get("id") == "footer":
+        if isinstance(child, Tag) and child.name == "div" and child.get("id") == "footer":
             break
-        if child.name in ("script", "style"):
+        if isinstance(child, Tag) and child.name in ("script", "style"):
             continue
         content.append(child)
     return content
 
 
-def _source_anchors(content: list[Tag]) -> list[str]:
+def source_anchors(content: list[Tag]) -> list[str]:
     """Every id and name attribute in the content, which a link fragment may target."""
     tags = [tag for element in content for tag in (element, *element.find_all(True))]
     return sorted({str(tag[a]) for tag in tags for a in ("id", "name") if tag.get(a)})

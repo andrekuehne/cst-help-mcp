@@ -5,8 +5,9 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any, get_args
 
@@ -26,14 +27,20 @@ from cst_help_mcp.navigation import (
     resolve_navigation,
 )
 from cst_help_mcp.render import render_markdown
-from cst_help_mcp.robohelp import PROSE, VBA, Profile, is_topic, read_topic
+from cst_help_mcp.robohelp import PROSE, VBA, is_topic, read_topic
+from cst_help_mcp.winwrap import read_winwrap_topic
+
+# Reads one topic's HTML into a Document: html, then source_path, locator, area and release by keyword.
+_Reader = Callable[..., Document]
+_READ_PROSE: _Reader = partial(read_topic, profile=PROSE)
+_READ_VBA: _Reader = partial(read_topic, profile=VBA)
 
 
 @dataclass(frozen=True)
 class _Project:
     area: str
     folder: str  # relative to the release folder
-    profile: Profile
+    read: _Reader
     # When set, only these files directly in the folder are read, all as topics: they are
     # topics that don't load whtopic.js, among WebHelp's shell pages.
     topics: tuple[str, ...] = ()
@@ -51,7 +58,7 @@ class _Project:
 # one listed here, so the ribbon topics belong to General.
 _CST_RELEASE_PROJECTS = (
     *(
-        _Project("general", f"Online Help/{folder}", PROSE)
+        _Project("general", f"Online Help/{folder}", _READ_PROSE)
         for folder in (
             "general",
             "userinterface",
@@ -62,10 +69,11 @@ _CST_RELEASE_PROJECTS = (
         )
     ),
     # The Python menu topics (CST Apps and user scripts) at the root of the help.
-    _Project("general", "Online Help", PROSE, topics=("menu.htm", "user_scipts.htm")),
-    _Project("3d", "Online Help/mergedProjects/3D", PROSE),
-    _Project("vba-3d", "Online Help/vba", PROSE),
-    _Project("vba-3d", "Online Help/mergedProjects/VBA_3D", VBA),
+    _Project("general", "Online Help", _READ_PROSE, topics=("menu.htm", "user_scipts.htm")),
+    _Project("3d", "Online Help/mergedProjects/3D", _READ_PROSE),
+    _Project("vba-3d", "Online Help/vba", _READ_PROSE),
+    _Project("vba-3d", "Online Help/mergedProjects/VBA_3D", _READ_VBA),
+    _Project("winwrap-basic", "Online Help/sax_basic", read_winwrap_topic),
 )
 
 
@@ -241,9 +249,8 @@ def _read_source(
                     report.skipped += 1
                     continue
                 found = True
-                doc = read_topic(
+                doc = project.read(
                     html,
-                    profile=project.profile,
                     source_path=rel,
                     locator=locator_for(rel),
                     area=project.area,
