@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Annotated
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver import Image
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp_types import ImageContent, TextContent
 from pydantic import Field
 
 from cst_help_mcp.errors import CstHelpError
@@ -37,6 +39,9 @@ def server_instructions(kb: KnowledgeBase) -> str:
         "If cst_help_lookup says an identifier is not documented and cst_help_search finds nothing "
         "either, tell the user so and do not invent the method, its arguments or its behaviour.\n\n"
         "Read a result's Section, or its whole Document without the #anchor, with cst_help_read.\n\n"
+        "Some answers are only in a figure. To see the figures of a Section, call cst_help_images "
+        "with its Locator, or with the Asset ids cst_help_read lists. Equation images are not "
+        "transcribed, so look at them rather than guess the formula.\n\n"
         "To explore a subject systematically, call cst_help_browse on the table of contents "
         "or the author keyword index.\n\n"
         f"{_incompleteness(kb)}"
@@ -156,11 +161,54 @@ def create_server(kb: KnowledgeBase, query_log: Path | None = None) -> MCPServer
     ) -> str:
         """Read a Section's Markdown, or a whole Document's, by its Locator, in pages of about 8,000 tokens.
 
-        Each page lists its outgoing links with their status.
+        Each page lists its outgoing links with their status, and its images with their Asset ids.
         """
         with _reported_as_tool_errors():
             page = kb.read(locator, cursor=cursor)
         return _page(page)
+
+    @server.tool(name="cst_help_images", structured_output=False)
+    async def images(
+        locator: Annotated[
+            str | None,
+            Field(description="a Section's Locator for its figures, or a Document's for all of them"),
+        ] = None,
+        assets: Annotated[
+            list[str] | None, Field(description="Asset ids, as cst_help_read lists them")
+        ] = None,
+        neighbours: Annotated[
+            int, Field(ge=0, le=3, description="with one Asset, how many images before and after it come too")
+        ] = 0,
+        include_icons: Annotated[bool, Field(description="also return small inline icons")] = False,
+    ) -> list[TextContent | ImageContent]:
+        """See the images the help shows: a Section's figures, the Assets named, or a figure with its neighbours.
+
+        Returns at most 4 PNG or JPEG images, at most 1,568 px on the long edge, with their captions.
+        """
+        with _reported_as_tool_errors():
+            result = kb.images(locator, assets or (), neighbours, include_icons)
+        if not result.images:
+            icons = "" if include_icons else "; it may show icons, which include_icons returns"
+            return [
+                TextContent(type="text", text=f"{locator} shows no images in Release {kb.release}{icons}.")
+            ]
+        shown = len(result.images)
+        lines = [
+            f"{shown} image{'s' if shown != 1 else ''} in Release {kb.release}, in this order:",
+            *(f"{n}. {hit}" for n, hit in enumerate(result.images, 1)),
+        ]
+        if result.left_out:
+            lines.append(
+                _within_budget(
+                    f"{len(result.left_out)} more not shown; request them by their Asset ids:",
+                    (f"- {hit}" for hit in result.left_out),
+                    RESPONSE_BUDGET // 2,
+                    "read the Section to find their ids",
+                    separator="\n",
+                )
+            )
+        content: list[TextContent | ImageContent] = [TextContent(type="text", text="\n".join(lines))]
+        return content + [Image(path=hit.path).to_image_content() for hit in result.images]
 
     return server
 
@@ -177,6 +225,8 @@ def _page(page: Page) -> str:
     after = []
     if page.links:
         after.append("\n".join(["Links:", *(f"- {link}" for link in page.links)]))
+    if page.images:
+        after.append("\n".join(["Images (see them with cst_help_images):", *(f"- {i}" for i in page.images)]))
     if page.next_cursor:
         after.append(f'More follows: call cst_help_read again with cursor "{page.next_cursor}".')
     return header + page.text + "".join(f"\n{part}\n" for part in after)

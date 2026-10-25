@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import io
 import json
 import sys
 from collections.abc import AsyncIterator
@@ -11,6 +13,7 @@ from typing import Any
 import pytest
 from kb_helpers import SOLVER_HF
 from mcp import Client, StdioServerParameters
+from PIL import Image
 
 from cst_help_mcp.build import build_collection
 from cst_help_mcp.retrieval import KnowledgeBase
@@ -44,7 +47,16 @@ async def client(kb: KnowledgeBase) -> AsyncIterator[Client]:
 async def test_exposes_its_tools_with_their_parameters(client: Client) -> None:
     tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
-    assert set(tools) == {"cst_help_lookup", "cst_help_search", "cst_help_browse", "cst_help_read"}
+    assert set(tools) == {
+        "cst_help_lookup",
+        "cst_help_search",
+        "cst_help_browse",
+        "cst_help_read",
+        "cst_help_images",
+    }
+    images: dict[str, Any] = tools["cst_help_images"].input_schema
+    assert set(images["properties"]) == {"locator", "assets", "neighbours", "include_icons"}
+    assert images.get("required", []) == []
     lookup: dict[str, Any] = tools["cst_help_lookup"].input_schema
     assert set(lookup["properties"]) == {"name", "area"}
     assert lookup["required"] == ["name"]
@@ -339,3 +351,43 @@ async def test_cst_help_serve_writes_the_query_log_it_is_given(vba_kb: Path, tmp
 
 def _locators(text: str) -> list[str]:
     return [line.removeprefix("Locator: ") for line in text.splitlines() if line.startswith("Locator: ")]
+
+
+WHICH_SOLVER = "3d/special_overview/special_overview_whichsolver.htm.md#CST_MICROWAVE_STUDIO_"
+
+
+@pytest.fixture
+async def prose_client(prose_kb: KnowledgeBase) -> AsyncIterator[Client]:
+    async with Client(create_server(prose_kb)) as connected:
+        yield connected
+
+
+async def test_images_returns_a_sections_figures_as_png_image_content_with_captions(
+    prose_client: Client,
+) -> None:
+    result = await prose_client.call_tool("cst_help_images", {"locator": WHICH_SOLVER})
+
+    assert not result.is_error
+    [text] = [block.text for block in result.content if block.type == "text"]
+    [image] = [block for block in result.content if block.type == "image"]
+    assert image.mime_type == "image/png"
+    with Image.open(io.BytesIO(base64.b64decode(image.data))) as png:
+        assert (png.format, png.size) == ("PNG", (502, 314))
+    assert "(figure, 502x314)" in text
+    assert WHICH_SOLVER in text
+
+
+async def test_images_returns_at_most_four_and_names_the_ones_left_out(prose_client: Client) -> None:
+    result = await prose_client.call_tool("cst_help_images", {"locator": WHICH_SOLVER, "include_icons": True})
+
+    text = "\n".join(block.text for block in result.content if block.type == "text")
+    assert [block.type for block in result.content].count("image") == 4
+    assert "solver transient icon" in text
+    assert "more not shown" in text and "(figure, 502x314)" in text
+
+
+async def test_images_of_an_unknown_asset_is_a_clear_error(prose_client: Client) -> None:
+    text, is_error = await _call(prose_client, "cst_help_images", {"assets": ["0123456789ab"]})
+
+    assert is_error
+    assert "No Asset '0123456789ab' in Release 2024" in text

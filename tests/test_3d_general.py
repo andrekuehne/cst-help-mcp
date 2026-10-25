@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from kb_helpers import ProseBuild
 
 from cst_help_mcp.retrieval import KnowledgeBase
@@ -98,7 +100,12 @@ def test_note_paragraphs_become_notes(prose_build: ProseBuild) -> None:
 def test_simple_tables_render_as_markdown(prose_build: ProseBuild) -> None:
     md = _md(prose_build, POLARIZATION)
 
-    assert "| Left circular polarization (LCP) | Right circular polarization (RCP) |\n|---|---|\n" in md
+    # A figure grid: the figures in the first row, their captions below them.
+    assert re.search(
+        r"\n\| !\[\]\(assets/\w+\.png\) \| !\[\]\(assets/\w+\.png\) \|\n\|---\|---\|\n"
+        r"\| Left circular polarization \(LCP\) \| Right circular polarization \(RCP\) \|\n",
+        md,
+    )
 
 
 def test_tables_with_merged_cells_stay_html(prose_build: ProseBuild) -> None:
@@ -128,7 +135,7 @@ def test_popup_links_become_ordinary_links(prose_build: ProseBuild) -> None:
     md = _md(prose_build, "3d/special_solvopt/special_solvopt_cht_time_step_settings.htm.md")
 
     assert (
-        "\n## [Simulation:](3d/common_ribbons/3d/common_ribbons_simulation_hf.htm.md) Solver > Setup Solver"
+        ".png) [Simulation:](3d/common_ribbons/3d/common_ribbons_simulation_hf.htm.md) Solver > Setup Solver"
         in md
     )
 
@@ -159,7 +166,8 @@ def test_ribbon_topics_copied_into_the_3d_project_are_aliases_of_the_general_one
     assert '"Online Help/mergedProjects/3D/common_ribbons/3d/common_ribbons_modeling.htm"' in md
     assert not (prose_build.tree / "3d/common_ribbons/3d/common_ribbons_modeling.htm.md").exists()
     # A link to the 3D copy reaches the Document (the Brick dialog's ribbon path).
-    assert f"## [Modeling:]({MODELING_RIBBON}) Shapes > Brick" in _md(prose_build, BRICK)
+    assert "## ![shape brick icon](assets/" in _md(prose_build, BRICK)
+    assert f" [Modeling:]({MODELING_RIBBON}) Shapes > Brick\n" in _md(prose_build, BRICK)
     assert len({h.locator for h in prose_kb.search("Modeling ribbon")} & {MODELING_RIBBON}) <= 1
     assert prose_build.report["counts"]["aliases"] > 10
 

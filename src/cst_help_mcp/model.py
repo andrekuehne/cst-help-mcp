@@ -12,8 +12,12 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-BlockKind = Literal["heading", "paragraph", "note", "list", "field", "code", "table", "api_signature"]
+BlockKind = Literal[
+    "heading", "paragraph", "note", "list", "field", "code", "table", "figure", "api_signature"
+]
 LinkStatus = Literal["unresolved", "resolved", "external", "outside"]
+# A figure, a small inline icon, or an equation that exists only as an image (not transcribed, ADR 0006).
+AssetKind = Literal["figure", "icon", "equation"]
 NavTree = Literal["toc", "keywords"]  # the table of contents and the author keyword index
 # The Document kinds that hold code rather than prose; the Library's readers add theirs.
 CODE_KINDS: frozenset[str] = frozenset()
@@ -23,6 +27,8 @@ SEPARATOR = " > "
 # A link's span in a block's text: ``[label](@N)``, N indexing Document.links. The label is
 # Markdown-escaped, so the text stays valid Markdown and the target can change without re-parsing.
 _LINK_SPAN = re.compile(r"\[((?:\\.|[^\\\]])*)\]\(@(\d+)\)")
+# An image's span: ``![alt](^N)``, N indexing Document.images, with the alt text as written.
+_IMAGE_SPAN = re.compile(r"!\[((?:\\.|[^\\\]])*)\]\(\^(\d+)\)")
 _ESCAPED = re.compile(r"\\(.)")
 _LABEL_SPECIALS = re.compile(r"([\\\[\]])")
 
@@ -40,6 +46,54 @@ class Link:
     target: str = ""
 
 
+@dataclass
+class ImageRef:
+    """An image as the source shows it, and the Asset it became once the build has read it.
+
+    ``src`` is a path relative to the release folder. ``alt`` is the source's alt text, unless it
+    only names a file. ``asset`` is the Asset's id, empty while the image is missing; ``file`` is
+    the Asset's path in the Collection's tree, and ``caption`` the Asset's caption.
+    """
+
+    src: str
+    alt: str = ""
+    asset: str = ""
+    kind: AssetKind = "figure"
+    file: str = ""
+    caption: str = ""
+
+    @property
+    def label(self) -> str:
+        """The text an image is shown with: its alt text or its Asset's caption, and whether it is an
+        equation that was not transcribed."""
+        label = self.alt or self.caption
+        if self.kind == "equation":
+            return f"{label}; {kind_label(self.kind)}" if label else kind_label(self.kind)
+        return label
+
+
+def kind_label(kind: AssetKind) -> str:
+    """How an Asset's kind is shown; an equation image says that it was not transcribed (ADR 0006)."""
+    return "equation image, not transcribed" if kind == "equation" else kind
+
+
+@dataclass
+class Asset:
+    """An image, deduplicated by content, as a Build's tree holds it (see assets.py)."""
+
+    id: str
+    kind: AssetKind
+    caption: str  # the first alt text a Document gives it; for an icon, else its file's name
+    width: int
+    height: int
+    file: str  # the path in the Collection's tree
+    served: str  # the copy the server returns: the file itself, or its copy scaled for clients
+    served_width: int
+    served_height: int
+    sources: list[str] = field(default_factory=list)  # paths relative to the release folder
+    documents: list[str] = field(default_factory=list)  # Locators of the Documents that show it
+
+
 def escape_label(label: str) -> str:
     """A link label escaped for Markdown."""
     return _LABEL_SPECIALS.sub(r"\\\1", label)
@@ -47,6 +101,20 @@ def escape_label(label: str) -> str:
 
 def link_span(label: str, index: int) -> str:
     return f"[{escape_label(label)}](@{index})"
+
+
+def image_span(alt: str, index: int) -> str:
+    return f"![{escape_label(alt)}](^{index})"
+
+
+def replace_images(text: str, replace: Callable[[str, int], str]) -> str:
+    """Replace each image span by ``replace(alt, index)``; the alt text is unescaped."""
+    return _IMAGE_SPAN.sub(lambda m: replace(_ESCAPED.sub(r"\1", m[1]), int(m[2])), text)
+
+
+def image_spans(text: str) -> list[tuple[str, int]]:
+    """The alt text, unescaped, and the index of each image span in the text."""
+    return [(_ESCAPED.sub(r"\1", m[1]), int(m[2])) for m in _IMAGE_SPAN.finditer(text)]
 
 
 def replace_links(text: str, replace: Callable[[str, int], str]) -> str:
@@ -60,8 +128,8 @@ def link_spans(text: str) -> list[tuple[str, int]]:
 
 
 def plain(text: str) -> str:
-    """Text with its link spans reduced to their labels."""
-    return replace_links(text, lambda label, _: label)
+    """Text with its link spans reduced to their labels, and its image spans to their alt text."""
+    return replace_links(replace_images(text, lambda alt, _: alt), lambda label, _: label)
 
 
 @dataclass
@@ -76,6 +144,13 @@ class Block:
     language: str = ""
     term: str = ""  # a field definition's field name; its description is the text
 
+    def images(self) -> list[int]:
+        """The index into its Document's images of each image the block shows, in order."""
+        if self.kind in ("code", "api_signature"):
+            return []  # code is verbatim, never spans
+        texts = [self.term, self.text, *self.items, *(cell for row in self.rows for cell in row)]
+        return [index for text in texts for _, index in image_spans(text)]
+
     def plain_text(self) -> str:
         """The block's text without markup, for indexing."""
         if self.kind == "list":
@@ -83,7 +158,7 @@ class Block:
         if self.kind == "table":
             return "\n".join(" ".join(plain(cell) for cell in row) for row in self.rows)
         if self.kind == "field":
-            return f"{self.term}\n{plain(self.text)}".strip()
+            return f"{plain(self.term)}\n{plain(self.text)}".strip()
         return plain(self.text)
 
 
@@ -121,6 +196,7 @@ class Document:
     sections: list[Section] = field(default_factory=list)
     api_entries: list[ApiEntry] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
+    images: list[ImageRef] = field(default_factory=list)
     aliases: list[str] = field(default_factory=list)  # other source paths of the same Document
     # The Areas of Aliases published in other projects; searches narrowed to them find the Document.
     alias_areas: list[str] = field(default_factory=list)
@@ -151,8 +227,10 @@ class Document:
         ]
         entries = [ApiEntry(**e) for e in data["api_entries"]]
         links = [Link(**link) for link in data["links"]]
-        fields = {k: v for k, v in data.items() if k not in ("sections", "api_entries", "links")}
-        return cls(**fields, sections=sections, api_entries=entries, links=links)
+        # Builds from before Assets existed hold no images.
+        images = [ImageRef(**image) for image in data.get("images", [])]
+        fields = {k: v for k, v in data.items() if k not in ("sections", "api_entries", "links", "images")}
+        return cls(**fields, sections=sections, api_entries=entries, links=links, images=images)
 
 
 @dataclass

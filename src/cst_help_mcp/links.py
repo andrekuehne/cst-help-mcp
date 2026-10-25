@@ -40,6 +40,10 @@ class LinkReport:
     missing_anchors: list[SourceLink] = field(default_factory=list)
 
 
+def is_url(href: str) -> bool:
+    return _URL.match(href) is not None
+
+
 def normalise_href(href: str, source_path: str) -> str | None:
     """A URL as written, or a path relative to the release folder with its fragment.
 
@@ -86,7 +90,7 @@ class Inventory:
         return f"{doc.locator}#{anchor}" if anchor else doc.locator
 
 
-def resolve_links(docs: list[Document], inventory: Inventory, release_folders: Iterable[Path]) -> LinkReport:
+def resolve_links(docs: list[Document], inventory: Inventory, on_disk: ReleaseFiles) -> LinkReport:
     """Set every link's status and target, and report them.
 
     A link is resolved when it leads to a Document or Alias, external when it is a URL,
@@ -94,7 +98,6 @@ def resolve_links(docs: list[Document], inventory: Inventory, release_folders: I
     filtered out, a PDF, an image), and unresolved when its file exists nowhere in the
     release folder.
     """
-    on_disk = _Files(release_folders)
     report = LinkReport()
     for doc in docs:
         for link in doc.links:
@@ -106,7 +109,9 @@ def resolve_links(docs: list[Document], inventory: Inventory, release_folders: I
     return report
 
 
-def _resolve(doc: Document, link: Link, inventory: Inventory, on_disk: _Files, report: LinkReport) -> None:
+def _resolve(
+    doc: Document, link: Link, inventory: Inventory, on_disk: ReleaseFiles, report: LinkReport
+) -> None:
     path, _, fragment = link.href.partition("#")
     target = inventory.document(path)
     if target is None:
@@ -138,17 +143,24 @@ def _where(path: str) -> str:
     return "/".join(parts.parts[: min(depth, len(parts.parts) - 1)]) or "(release folder)"
 
 
-class _Files:
-    """The lowercase relative paths of the files in the release folders, read per top-level folder on first use."""
+class ReleaseFiles:
+    """The files in the release folders, found by relative path without regard to case.
+
+    Each top-level folder is read on first use.
+    """
 
     def __init__(self, release_folders: Iterable[Path]) -> None:
         self._folders = list(release_folders)
-        self._paths: set[str] = set()
+        self._paths: dict[str, Path] = {}
         self._walked: set[str] = set()
 
     def exists(self, path: str) -> bool:
+        return self.find(path) is not None
+
+    def find(self, path: str) -> Path | None:
+        """The file a path relative to the release folder names, or None."""
         if path.startswith("../"):
-            return False  # above the release folder
+            return None  # above the release folder
         top = path.split("/", 1)[0].lower()
         if top not in self._walked:
             self._walked.add(top)
@@ -156,12 +168,13 @@ class _Files:
                 for entry in folder.iterdir() if folder.is_dir() else ():
                     if entry.name.lower() == top:
                         self._add(folder, entry)
-        return path.lower() in self._paths
+        return self._paths.get(path.lower())
 
     def _add(self, folder: Path, entry: Path) -> None:
         if entry.is_file():
-            self._paths.add(entry.name.lower())
+            self._paths.setdefault(entry.name.lower(), entry)
             return
         for dirpath, _, filenames in os.walk(entry):
             rel = Path(dirpath).relative_to(folder).as_posix()
-            self._paths.update(f"{rel}/{name}".lower() for name in filenames)
+            for name in filenames:
+                self._paths.setdefault(f"{rel}/{name}".lower(), Path(dirpath) / name)

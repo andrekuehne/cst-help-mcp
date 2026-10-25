@@ -24,7 +24,7 @@ MIXED_RELEASE: dict[str, str | bytes] = {
     "widgets/gadget.htm": topic("Gadget", "Turn", "Turns the gadget."),
     BROKEN: topic("Broken", "Fail", "Café.").encode("cp1252"),
     "widgets/skin.htm": "<html><body>A WebHelp skin page, not a topic.</body></html>",
-    "widgets/spin.gif": b"GIF89a",
+    "widgets/spin.avi": b"RIFF",
 }
 
 
@@ -85,14 +85,15 @@ def test_the_build_report_counts_documents_and_lists_failures(tmp_path: Path) ->
         "failed": 1,
         "unresolved_links": 0,
         "missing_anchors": 0,
-        "missing_assets": None,
+        "assets": 0,
+        "missing_assets": 0,
         "unsupported": 1,
     }
     assert report["complete"] is False
     [failure] = report["failures"]
     assert failure["source"].endswith(BROKEN)
     assert "utf-8" in failure["error"]
-    assert report["unsupported"] == {".gif": 1}
+    assert report["unsupported"] == {".avi": 1}
 
 
 def test_a_failed_document_marks_the_knowledge_base_incomplete_and_the_server_says_so(
@@ -136,7 +137,7 @@ def test_the_cli_prints_a_summary_of_the_report(tmp_path: Path, capsys: pytest.C
     out = capsys.readouterr().out
     assert code == 0
     assert "discovered 4, converted 2, skipped 1, failed 1" in out
-    assert "unresolved links 0, missing anchors 0, missing Assets not checked yet, unsupported items 1" in out
+    assert "unresolved links 0, missing anchors 0, missing Assets 0, unsupported items 1" in out
     assert f"failed: {BROKEN}" in out.replace("Online Help/mergedProjects/VBA_3D/", "")
     assert "incomplete" in out
 

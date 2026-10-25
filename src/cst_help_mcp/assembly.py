@@ -17,7 +17,7 @@ from typing import Any
 from cst_help_mcp import layout
 from cst_help_mcp.errors import KnowledgeBaseError
 from cst_help_mcp.index import IndexedBuild, write_index
-from cst_help_mcp.model import Document, NavNode, NavTree
+from cst_help_mcp.model import Asset, Document, NavNode, NavTree
 
 
 @dataclass(frozen=True)
@@ -54,7 +54,11 @@ def _indexed(build: Path) -> IndexedBuild:
     nav_file = build / layout.NAVIGATION_FILE
     trees: dict[NavTree, list[Any]] = layout.read_json(nav_file) if nav_file.is_file() else {}
     navigation = {tree: [NavNode.from_dict(n) for n in nodes] for tree, nodes in trees.items()}
-    return IndexedBuild(manifest.collection, manifest.release, build.name, manifest.failed, docs, navigation)
+    assets_file = tree / layout.ASSETS_INDEX
+    assets = [Asset(**a) for a in layout.read_json(assets_file)] if assets_file.is_file() else []
+    return IndexedBuild(
+        manifest.collection, manifest.release, build.name, manifest.failed, docs, navigation, assets
+    )
 
 
 def _update_view(kb_path: Path, collection: str, tree: Path) -> None:

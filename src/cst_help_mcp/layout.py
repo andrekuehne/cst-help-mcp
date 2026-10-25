@@ -44,6 +44,9 @@ ENTRY_FILES: dict[NavTree, tuple[str, str]] = {
     "toc": ("toc.md", "Table of contents"),
     "keywords": ("keywords.md", "Keywords"),
 }
+# The folder of a Build's tree that holds its Assets, and the list of them it holds.
+ASSETS_DIR = "assets"
+ASSETS_INDEX = f"{ASSETS_DIR}/assets.json"
 ASSEMBLY_MANIFEST = "assembly.json"
 INDEX_FILE = "index.sqlite"
 TREE = "tree"

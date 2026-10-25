@@ -17,10 +17,12 @@ from cst_help_mcp import layout
 from cst_help_mcp.errors import KnowledgeBaseError
 from cst_help_mcp.index import name_key, open_read_only
 from cst_help_mcp.locator import document_part
-from cst_help_mcp.model import CODE_KINDS, SEPARATOR, Document, NavTree
-from cst_help_mcp.reading import Page, read_page
+from cst_help_mcp.model import CODE_KINDS, SEPARATOR, AssetKind, Document, NavTree, kind_label
+from cst_help_mcp.reading import Page, read_page, section_of
 
 MAX_HITS = 10
+MAX_IMAGES = 4
+_MIME_TYPES = {".png": "image/png", ".jpg": "image/jpeg"}
 _CANDIDATES = 100  # Sections each index contributes before the tiers are merged
 _SNIPPET_WORDS = 24
 _RRF_K = 60  # the usual constant of reciprocal rank fusion
@@ -81,6 +83,19 @@ class _NavRow(NamedTuple):
     children: int
 
 
+class _AssetRow(NamedTuple):
+    id: str
+    kind: AssetKind
+    caption: str
+    served: str
+    width: int
+    height: int
+    sources: str  # one per line, as the assets table holds them
+    documents: str
+    collection: str
+    build: str
+
+
 class _ApiSection(NamedTuple):
     """A Section that search answers with an API Entry: the entry's Locator and snippet."""
 
@@ -117,6 +132,31 @@ class SearchHit:
         """The hit's Area, kind and flags, as the CLI and the MCP server show them."""
         flags = [name for name, on in (("generated", self.generated), ("heuristic", self.heuristic)) if on]
         return [self.area, self.kind, *flags]
+
+
+@dataclass(frozen=True)
+class ImageHit:
+    asset: str  # the Asset's id
+    kind: AssetKind
+    caption: str
+    locator: str  # the Section that shows it
+    sources: list[str]  # its paths relative to the release folder
+    width: int  # of the copy served, at most CLIENT_EDGE on its long edge
+    height: int
+    path: Path  # the served copy's file
+    mime_type: str
+
+    def __str__(self) -> str:
+        caption = self.caption or "no caption"
+        return (
+            f"{self.asset}: {caption} ({kind_label(self.kind)}, {self.width}x{self.height}) in {self.locator}"
+        )
+
+
+@dataclass(frozen=True)
+class ImageResult:
+    images: list[ImageHit]  # at most MAX_IMAGES, in document order
+    left_out: list[ImageHit]  # further images that matched, which can be requested by their Asset ids
 
 
 @dataclass(frozen=True)
@@ -363,14 +403,90 @@ class KnowledgeBase:
         The Locator may be an Alias's. Without a cursor the first page is read; each page gives
         the cursor of the next.
         """
+        doc, markdown = self._document(locator)
+        text = markdown.read_text(encoding="utf-8", newline="")
+        return read_page(doc, text, locator.partition("#")[2] or None, cursor)
+
+    def images(
+        self,
+        locator: str | None = None,
+        assets: Sequence[str] = (),
+        neighbours: int = 0,
+        include_icons: bool = False,
+    ) -> ImageResult:
+        """Images the server can return: the figures of the Section a Locator names (of the whole
+        Document without an anchor), or the Assets named by their ids, at most MAX_IMAGES of them.
+
+        With ``neighbours`` and one Asset, that many images before and after it in its Document
+        come too. The Document is the one the Locator names, or else the first that shows the
+        Asset. Icons are left out unless ``include_icons``, except an Asset asked for by its id.
+        """
+        wanted = list(dict.fromkeys(assets))
+        if not locator and not wanted:
+            raise KnowledgeBaseError("Name a Locator, or the Asset ids that cst_help_read lists")
+        if neighbours and len(wanted) != 1:
+            raise KnowledgeBaseError("Neighbours are found around exactly one Asset; name one Asset id")
+        rows = self._asset_rows(wanted)
+        chosen: list[tuple[str, str]] = []  # the Locator of the Section showing an Asset, and its id
+        if not wanted:
+            assert locator is not None
+            doc, _ = self._document(locator)
+            anchor = locator.partition("#")[2]
+            section = section_of(doc, anchor) if anchor else None
+            chosen = [(at, a) for at, a, kind in _shown(doc, section) if include_icons or kind != "icon"]
+        for asset in wanted:
+            doc, _ = self._document(locator or rows[asset].documents.split("\n")[0])
+            around = [
+                (at, a) for at, a, kind in _shown(doc, None) if a == asset or include_icons or kind != "icon"
+            ]
+            position = next((i for i, (_, a) in enumerate(around) if a == asset), None)
+            if position is None:
+                raise KnowledgeBaseError(f"{doc.locator} shows no Asset '{asset}'")
+            chosen += around[max(0, position - neighbours) : position + neighbours + 1]
+        rows |= self._asset_rows([a for _, a in chosen if a not in rows])
+        hits = [self._image_hit(rows[asset], at) for at, asset in chosen]
+        return ImageResult(hits[:MAX_IMAGES], hits[MAX_IMAGES:])
+
+    def _asset_rows(self, ids: list[str]) -> dict[str, _AssetRow]:
+        if not ids:
+            return {}
+        rows = self._con.execute(
+            "SELECT a.id, a.kind, a.caption, a.served, a.width, a.height, a.sources, a.documents,"
+            " a.collection, c.build FROM assets a JOIN collections c ON c.name = a.collection"
+            f" WHERE a.release = ? AND a.id IN ({_placeholders(ids)})",
+            [self.release, *ids],
+        )
+        found = {row[0]: _AssetRow(*row) for row in rows}
+        unknown = [i for i in ids if i not in found]
+        if unknown:
+            raise KnowledgeBaseError(
+                f"No Asset {', '.join(repr(i) for i in unknown)} in Release {self.release}; "
+                "cst_help_read lists the Asset ids of the images a page shows"
+            )
+        return found
+
+    def _image_hit(self, row: _AssetRow, locator: str) -> ImageHit:
+        path = layout.build_dir(self.path, row.collection, row.build) / layout.TREE / row.served
+        return ImageHit(
+            row.id,
+            row.kind,
+            row.caption,
+            locator,
+            row.sources.split("\n"),
+            row.width,
+            row.height,
+            path,
+            _MIME_TYPES[path.suffix],
+        )
+
+    def _document(self, locator: str) -> tuple[Document, Path]:
+        """The model of the Document a Locator names, perhaps as an Alias's, and its Markdown file."""
         document = self.document_of(locator)
         if document is None:
             raise KnowledgeBaseError(self._unknown_document(document_part(locator)))
         markdown = self._file(document)
         model = markdown.with_name(f"{markdown.name}.json")
-        doc = Document.from_dict(layout.read_json(model))
-        text = markdown.read_text(encoding="utf-8", newline="")
-        return read_page(doc, text, locator.partition("#")[2] or None, cursor)
+        return Document.from_dict(layout.read_json(model)), markdown
 
     def _file(self, document: str) -> Path:
         """The Markdown file of a Document in the Build this database was assembled from.
@@ -473,6 +589,22 @@ class KnowledgeBase:
                 raise KnowledgeBaseError(
                     f"Unknown Area '{area}' in Release {self.release}; available: {', '.join(self.areas)}"
                 )
+
+
+def _shown(doc: Document, section: int | None) -> list[tuple[str, str, AssetKind]]:
+    """The images a Section shows, or a whole Document: the Section's Locator, the Asset's id and its
+    kind, in document order, once per Section. Missing images are left out."""
+    shown: dict[tuple[str, str], AssetKind] = {}
+    for i, s in enumerate(doc.sections):
+        if section is not None and i != section:
+            continue
+        at = f"{doc.locator}#{s.anchor}" if s.anchor else doc.locator
+        for block in s.blocks:
+            for index in block.images():
+                image = doc.images[index]
+                if image.asset:
+                    shown.setdefault((at, image.asset), image.kind)
+    return [(at, asset, kind) for (at, asset), kind in shown.items()]
 
 
 def _api_key(name: str) -> str:

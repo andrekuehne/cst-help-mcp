@@ -7,7 +7,18 @@ import json
 import re
 from dataclasses import dataclass, replace
 
-from cst_help_mcp.model import Block, Document, Link, NavNode, escape_label, link_spans, replace_links
+from cst_help_mcp.model import (
+    Block,
+    Document,
+    ImageRef,
+    Link,
+    NavNode,
+    escape_label,
+    image_spans,
+    link_spans,
+    replace_images,
+    replace_links,
+)
 
 
 @dataclass(frozen=True)
@@ -16,12 +27,14 @@ class Part:
     the blank line after a block. Joined in order, the parts are the Markdown.
 
     ``section`` indexes the Document's Sections, and is None for the frontmatter. ``links`` are the
-    label and the index into the Document's links of each link the piece shows.
+    label and the index into the Document's links of each link the piece shows, and ``images`` the
+    index into its images of each image it shows.
     """
 
     text: str
     section: int | None
     links: tuple[tuple[str, int], ...] = ()
+    images: tuple[int, ...] = ()
 
 
 def render_markdown(doc: Document) -> str:
@@ -51,9 +64,10 @@ def render_parts(doc: Document) -> list[Part]:
         if section.anchors:
             parts.append(Part(_joined([f'<a id="{anchor}"></a>' for anchor in section.anchors]), i))
         for block in section.blocks:
-            for line, sources in _block(block, doc.links):
+            for line, sources in _block(block, doc.links, doc.images):
                 spans = tuple(span for source in sources for span in link_spans(source))
-                parts.append(Part(f"{line}\n", i, spans))
+                images = tuple(index for source in sources for _, index in image_spans(source))
+                parts.append(Part(f"{line}\n", i, spans, images))
             parts.append(Part("\n", i))
     return _trimmed(parts)
 
@@ -102,23 +116,23 @@ def _link(label: str, href: str) -> str:
     return f"[{escape_label(label)}]({href})"
 
 
-def _block(block: Block, links: list[Link]) -> list[tuple[str, list[str]]]:
-    """The block's lines, each with the model texts whose links it shows."""
+def _block(block: Block, links: list[Link], images: list[ImageRef]) -> list[tuple[str, list[str]]]:
+    """The block's lines, each with the model texts whose links and images it shows."""
 
     def inline(text: str) -> str:
-        return _inline(text, links)
+        return _inline(text, links, images)
 
     match block.kind:
         case "heading":
             return [(f"{'#' * block.level} {inline(block.text)}", [block.text])]
-        case "paragraph":
+        case "paragraph" | "figure":
             return [(inline(block.text), [block.text])]
         case "list":
             return [(f"- {inline(item)}", [item]) for item in block.items]
         case "note":
             return [(f"> **Note:** {inline(block.text)}", [block.text])]
         case "field":
-            term: tuple[str, list[str]] = (f"**{block.term}**", [])
+            term: tuple[str, list[str]] = (f"**{inline(block.term)}**", [block.term])
             return [term, *([(f": {inline(block.text)}", [block.text])] if block.text else [])]
         case "code" | "api_signature":
             fence = _fence(block.text)
@@ -126,7 +140,8 @@ def _block(block: Block, links: list[Link]) -> list[tuple[str, list[str]]]:
         case "table":
             # Markdown cannot merge cells, so a table with merged cells stays HTML (ADR 0007).
             if block.spans:
-                rows = _html_table([[_inline_html(c, links) for c in r] for r in block.rows], block.spans)
+                cells = [[_inline_html(c, links, images) for c in r] for r in block.rows]
+                rows = _html_table(cells, block.spans)
                 return list(zip(rows, [[], *block.rows, []], strict=True))
             rows = _table([[inline(c) for c in r] for r in block.rows])
             return list(zip(rows, [block.rows[0], [], *block.rows[1:]], strict=True))
@@ -141,15 +156,20 @@ def _href(link: Link) -> str | None:
     return None
 
 
-def _inline(text: str, links: list[Link]) -> str:
+def _inline(text: str, links: list[Link], images: list[ImageRef]) -> str:
     def markdown(label: str, index: int) -> str:
         href = _href(links[index])
         return label if href is None else _link(label, href)
 
-    return replace_links(text, markdown)
+    def image(_: str, index: int) -> str:
+        ref = images[index]
+        return f"!{_link(ref.label, ref.file)}" if ref.file else _missing(ref)
+
+    # A rendered image is no link span, so the link spans are replaced after the image spans.
+    return replace_links(replace_images(text, image), markdown)
 
 
-def _inline_html(text: str, links: list[Link]) -> str:
+def _inline_html(text: str, links: list[Link], images: list[ImageRef]) -> str:
     anchors: list[str] = []
 
     def placeholder(label: str, index: int) -> str:
@@ -158,8 +178,21 @@ def _inline_html(text: str, links: list[Link]) -> str:
         anchors.append(label if href is None else f'<a href="{html.escape(href)}">{label}</a>')
         return f"\x00{len(anchors) - 1}\x00"
 
-    escaped = html.escape(replace_links(text, placeholder), quote=False)
+    def image(_: str, index: int) -> str:
+        ref = images[index]
+        if ref.file:
+            anchors.append(f'<img src="{html.escape(ref.file)}" alt="{html.escape(ref.label)}">')
+        else:
+            anchors.append(html.escape(_missing(ref), quote=False))
+        return f"\x00{len(anchors) - 1}\x00"
+
+    escaped = html.escape(replace_links(replace_images(text, image), placeholder), quote=False)
     return re.sub(r"\x00(\d+)\x00", lambda m: anchors[int(m[1])], escaped)
+
+
+def _missing(image: ImageRef) -> str:
+    """How an image without an Asset is shown: by its alt text, or else by the file it names."""
+    return image.alt or f"(missing image {image.src.rsplit('/', 1)[-1]})"
 
 
 def _fence(text: str) -> str:

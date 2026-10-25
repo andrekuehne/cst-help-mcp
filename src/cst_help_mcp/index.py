@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cst_help_mcp.locator import locator_for
-from cst_help_mcp.model import Document, NavNode, NavTree
+from cst_help_mcp.model import Asset, Document, NavNode, NavTree
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS collections (
@@ -83,6 +83,20 @@ CREATE TABLE IF NOT EXISTS nav_entries (
     children INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS nav_entries_parent ON nav_entries (tree, parent);
+-- Every Asset, with the copy of it the server returns.
+CREATE TABLE IF NOT EXISTS assets (
+    collection TEXT NOT NULL,
+    release TEXT NOT NULL,
+    id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    caption TEXT NOT NULL,
+    served TEXT NOT NULL,  -- the path of the served copy in the Collection's tree
+    width INTEGER NOT NULL,  -- of the served copy
+    height INTEGER NOT NULL,
+    sources TEXT NOT NULL,  -- paths relative to the release folder, one per line
+    documents TEXT NOT NULL  -- Locators of the Documents that show it, one per line
+);
+CREATE INDEX IF NOT EXISTS assets_id ON assets (id);
 """
 
 
@@ -94,6 +108,7 @@ class IndexedBuild:
     failed: int
     docs: Iterable[Document]
     navigation: dict[NavTree, list[NavNode]]
+    assets: list[Asset]
 
 
 def name_key(name: str) -> str:
@@ -120,6 +135,24 @@ def write_index(db_path: Path, builds: Iterable[IndexedBuild]) -> None:
                     _insert(con, build.collection, doc)
                 for tree, nodes in build.navigation.items():
                     _insert_nav(con, build.collection, build.release, tree, None, nodes)
+                con.executemany(
+                    "INSERT INTO assets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        (
+                            build.collection,
+                            build.release,
+                            a.id,
+                            a.kind,
+                            a.caption,
+                            a.served,
+                            a.served_width,
+                            a.served_height,
+                            "\n".join(a.sources),
+                            "\n".join(a.documents),
+                        )
+                        for a in build.assets
+                    ],
+                )
     finally:
         con.close()
 

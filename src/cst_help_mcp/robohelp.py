@@ -15,9 +15,21 @@ from dataclasses import dataclass, field
 from bs4 import BeautifulSoup, Tag
 from bs4.element import CData, NavigableString, PageElement
 
-from cst_help_mcp.links import normalise_href
+from cst_help_mcp.links import is_url, normalise_href
 from cst_help_mcp.locator import anchor_for, is_usable_source_id
-from cst_help_mcp.model import SEPARATOR, ApiEntry, Block, Document, Link, Section, link_span, plain
+from cst_help_mcp.model import (
+    SEPARATOR,
+    ApiEntry,
+    Block,
+    Document,
+    ImageRef,
+    Link,
+    Section,
+    image_span,
+    link_span,
+    plain,
+    replace_images,
+)
 from cst_help_mcp.navigation import decode_js_string
 
 
@@ -97,6 +109,12 @@ _BLOCK_TAGS = frozenset(
 )
 _NOTE = re.compile(r"(?:please\s+)?note\s*:\s*", re.IGNORECASE)
 _TOC_INFO = re.compile(r'addTocInfo\s*\(\s*"((?:\\.|[^"\\])*)"\s*\)', re.DOTALL)
+# Images that are page chrome, not content: the per-page logos and WebHelp's skin images.
+_CHROME = re.compile(
+    r"(ds_simulia\.png|3dexp\.png|3ds\.png|wh[a-z0-9_]*\.gif|purple_book_\w+\.gif)", re.IGNORECASE
+)
+# Alt text that only names the image's file, such as "image\brick.gif", says nothing.
+_FILE_NAME = re.compile(r"[\\/]|\.(png|gif|jpe?g|bmp|svg)$", re.IGNORECASE)
 
 
 def is_topic(html: str) -> bool:
@@ -125,6 +143,7 @@ def read_topic(
         sections=[s for s in builder.sections if s.blocks],
         api_entries=builder.entries,
         links=builder.links,
+        images=builder.images,
         source_anchors=_source_anchors(content),
         breadcrumbs=breadcrumbs(html),
     )
@@ -165,15 +184,19 @@ def _source_anchors(content: list[Tag]) -> list[str]:
     return sorted({str(tag[a]) for tag in tags for a in ("id", "name") if tag.get(a)})
 
 
-def _text(element: PageElement | None, link: Callable[[Tag], int | None] | None = None) -> str:
+_Register = Callable[[Tag], int | None]
+
+
+def _text(element: PageElement | None, link: _Register | None = None, image: _Register | None = None) -> str:
     """An element's text with whitespace collapsed; block-level children are kept apart.
 
-    With ``link``, each ``<a>`` that it registers (returning the link's index) becomes a link span.
+    With ``link``, each ``<a>`` that it registers (returning the link's index) becomes a link span;
+    with ``image``, each ``<img>`` that it registers becomes an image span.
     """
     if element is None:
         return ""
     parts: list[str] = []
-    _collect_text(element, parts, link)
+    _collect_text(element, parts, link, image)
     return _collapse("".join(parts))
 
 
@@ -181,13 +204,20 @@ def _collapse(text: str) -> str:
     return re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
 
 
-def _collect_text(element: PageElement, parts: list[str], link: Callable[[Tag], int | None] | None) -> None:
+def _collect_text(
+    element: PageElement, parts: list[str], link: _Register | None, image: _Register | None
+) -> None:
     # Comments (commented-out content) and processing instructions are other string types.
     if isinstance(element, NavigableString):
         if type(element) in (NavigableString, CData):
             parts.append(str(element))
         return
     if not isinstance(element, Tag) or element.name in ("script", "style"):
+        return
+    if image is not None and element.name == "img":
+        index = image(element)
+        if index is not None:
+            parts.append(image_span(_alt(element), index))
         return
     if link is not None and element.name == "a":
         label = _text(element)
@@ -197,14 +227,24 @@ def _collect_text(element: PageElement, parts: list[str], link: Callable[[Tag], 
             lead = " " if raw[:1].isspace() else ""
             trail = " " if raw[-1:].isspace() else ""
             parts.append(f"{lead}{link_span(label, index)}{trail}")
+            # The label is text only, so the link's images follow it.
+            if image is not None:
+                for img in element.find_all("img"):
+                    _collect_text(img, parts, None, image)
             return
     spaced = element.name in _BLOCK_TAGS
     if spaced:
         parts.append(" ")
     for child in element.children:
-        _collect_text(child, parts, link)
+        _collect_text(child, parts, link, image)
     if spaced:
         parts.append(" ")
+
+
+def _alt(element: Tag) -> str:
+    """An image's alt text, unless it only names a file."""
+    alt = _collapse(str(element.get("alt", "")))
+    return "" if _FILE_NAME.search(alt) else alt
 
 
 def _code_line(element: Tag) -> str:
@@ -272,6 +312,7 @@ class _DocumentBuilder:
     sections: list[Section] = field(default_factory=list)
     entries: list[ApiEntry] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
+    images: list[ImageRef] = field(default_factory=list)
     object_name: str | None = None
     category: str | None = None
     _object_entries: list[ApiEntry] = field(default_factory=list)
@@ -319,7 +360,8 @@ class _DocumentBuilder:
         if role == "skip":
             return
         if role == "term":
-            self._pending_term = _text(element) or None
+            # A field name keeps its icon, such as the solver's icon beside "Time Domain Solver".
+            self._pending_term = _text(element, image=self._image) or None
         elif role == "object":
             self._object_heading(_text(element))
         elif role == "category":
@@ -346,8 +388,16 @@ class _DocumentBuilder:
         return target.partition("#")[0].lower() == self.source_path.lower()
 
     def _inline(self, element: Tag) -> str:
-        """An element's text, with link spans for its links."""
-        return _text(element, self._link)
+        """An element's text, with link spans for its links and image spans for its images."""
+        return _text(element, self._link, self._image)
+
+    def _image(self, element: Tag) -> int | None:
+        """Register an image; page chrome and images that name no file are left out."""
+        src = normalise_href(str(element.get("src", "")), self.source_path)
+        if src is None or is_url(src) or _CHROME.fullmatch(src.rsplit("/", 1)[-1]):
+            return None
+        self.images.append(ImageRef(src.partition("#")[0], _alt(element)))
+        return len(self.images) - 1
 
     def _link(self, element: Tag) -> int | None:
         href = str(element.get("href", ""))
@@ -471,6 +521,8 @@ class _DocumentBuilder:
         note = _NOTE.match(text)
         if note:
             self._note(text[note.end() :])
+        elif text and not plain(replace_images(text, lambda *_: "")).strip():
+            self.current.blocks.append(Block("figure", text=text))
         elif text:
             self.current.blocks.append(Block("paragraph", text=text))
 

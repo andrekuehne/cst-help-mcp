@@ -9,7 +9,7 @@
 - [x] Reading a Locator with an anchor returns that Section, and reading one without an anchor returns the Document.
 - [x] Long content is split into pages of about 8,000 tokens, and the cursor continues where the last page ended.
 - [x] The text equals the Markdown file's content for that range.
-- [ ] Outgoing links come with their resolution status, and image references with their Asset ids and captions.
+- [x] Outgoing links come with their resolution status, and image references with their Asset ids and captions. (Image references done in ticket 09.)
 - [x] An unknown Locator gives a clear error.
 
 ## Comments

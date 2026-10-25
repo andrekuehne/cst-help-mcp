@@ -13,9 +13,10 @@ from typing import Any, get_args
 
 from cst_help_mcp import layout
 from cst_help_mcp.assembly import assemble
+from cst_help_mcp.assets import write_assets
 from cst_help_mcp.config import CollectionConfig, SourceConfig, load_config
 from cst_help_mcp.errors import BuildError
-from cst_help_mcp.links import Inventory, LinkReport, resolve_links
+from cst_help_mcp.links import Inventory, LinkReport, ReleaseFiles, SourceLink, resolve_links
 from cst_help_mcp.locator import locator_for
 from cst_help_mcp.model import Document, LinkStatus
 from cst_help_mcp.navigation import (
@@ -69,6 +70,9 @@ _CST_RELEASE_PROJECTS = (
 )
 
 
+_IMAGE_SUFFIXES = frozenset((".png", ".gif", ".jpg", ".jpeg", ".bmp", ".svg", ".ico"))
+
+
 @dataclass(frozen=True)
 class Failure:
     source: str  # the Document's source path
@@ -83,8 +87,9 @@ class BuildReport:
     converted: int = 0
     skipped: int = 0
     aliases: int = 0  # converted topics that became Aliases of another Document
-    # None until ticket 09 checks them.
-    missing_assets: int | None = None
+    assets: int = 0
+    # Images whose file is missing from the release folder, or can't be read as an image.
+    missing_assets: list[SourceLink] = field(default_factory=list)
     failures: list[Failure] = field(default_factory=list)
     links: LinkReport = field(default_factory=LinkReport)
     navigation: NavigationReport = field(default_factory=NavigationReport)
@@ -122,7 +127,8 @@ class BuildReport:
                 "failed": self.failed,
                 "unresolved_links": self.unresolved_links,
                 "missing_anchors": self.missing_anchors,
-                "missing_assets": self.missing_assets,
+                "assets": self.assets,
+                "missing_assets": len(self.missing_assets),
                 "unsupported": sum(self.unsupported.values()),
             },
             "api_entries": self.api_entries,
@@ -130,6 +136,7 @@ class BuildReport:
             "outside_links": dict(self.links.outside.most_common()),
             "unresolved_links": [asdict(u) for u in self.links.unresolved],
             "missing_anchors": [asdict(u) for u in self.links.missing_anchors],
+            "missing_assets": [asdict(m) for m in self.missing_assets],
             "navigation": asdict(self.navigation),
             "failures": [asdict(f) for f in self.failures],
             "unsupported": dict(sorted(self.unsupported.items())),
@@ -167,11 +174,14 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
         raise BuildError(f"{report.failed} Documents failed to build, and --strict is set: {_listed(report)}")
     report.api_entries = sum(len(d.api_entries) for d in docs)
     inventory = Inventory(docs)
-    report.links = resolve_links(docs, inventory, release_folders)
+    files = ReleaseFiles(release_folders)
+    report.links = resolve_links(docs, inventory, files)
     report.navigation = resolve_navigation(navigation, inventory)
     build_id = layout.new_id()
     final = layout.build_dir(config.kb_path, collection.name, build_id)
     with layout.staged(final) as staging:
+        assets, report.missing_assets = write_assets(staging / layout.TREE, docs, files)
+        report.assets = len(assets)
         _write_tree(staging / layout.TREE, docs)
         _write_navigation(staging, collection.release, navigation)
         layout.write_json(staging / layout.REPORT_FILE, report.to_dict())
@@ -212,7 +222,9 @@ def _read_source(
             if not _selected(rel, source):
                 continue
             if file.suffix.lower() != ".htm":
-                report.unsupported[file.suffix.lower()] += 1
+                # Images become Assets when a Document shows them.
+                if file.suffix.lower() not in _IMAGE_SUFFIXES:
+                    report.unsupported[file.suffix.lower()] += 1
                 continue
             report.discovered += 1
             try:

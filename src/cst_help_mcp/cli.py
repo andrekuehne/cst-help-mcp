@@ -150,7 +150,7 @@ def _build(args: argparse.Namespace) -> int:
     report = result.report
     print(
         f"Built {args.collection}: {report.documents} Documents,"
-        f" {report.api_entries} API Entries (Build {result.build_id})"
+        f" {report.api_entries} API Entries, {report.assets} Assets (Build {result.build_id})"
     )
     print(
         f"  Documents: discovered {report.discovered}, converted {report.converted},"
@@ -158,7 +158,7 @@ def _build(args: argparse.Namespace) -> int:
     )
     print(
         f"  unresolved links {report.unresolved_links}, missing anchors {report.missing_anchors},"
-        f" missing Assets {_count(report.missing_assets)},"
+        f" missing Assets {len(report.missing_assets)},"
         f" unsupported items {sum(report.unsupported.values())}"
     )
     for failure in report.failures:
@@ -166,10 +166,6 @@ def _build(args: argparse.Namespace) -> int:
     if not report.complete:
         print(f"The Knowledge Base is incomplete; see {result.report_path}, or rebuild with --strict.")
     return 0
-
-
-def _count(n: int | None) -> str:
-    return "not checked yet" if n is None else str(n)
 
 
 def _assemble(args: argparse.Namespace) -> int:
@@ -250,6 +246,11 @@ def _read(args: argparse.Namespace) -> int:
         print("Links:")
         for link in page.links:
             print(f"- {link}")
+    if page.images:
+        print()
+        print("Images:")
+        for image in page.images:
+            print(f"- {image}")
     if page.next_cursor:
         print()
         print(f"More follows: read it with --cursor {page.next_cursor}")
