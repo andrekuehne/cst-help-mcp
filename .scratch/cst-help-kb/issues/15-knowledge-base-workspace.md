@@ -10,7 +10,7 @@
 - [x] `api.md` lists every API Entry one per line: qualified name, Area, signature, path with anchor. It is the exact table, meant for grep.
 - [x] `CLAUDE.md` imports `AGENTS.md`. A `.cursor/rules/` file does the same for Cursor if ticket 25 finds that Cursor does not read `AGENTS.md` by itself.
 - [x] A `work/` folder for what agents write and a `guides/` folder for Guides (ticket 24) exist, and builds and assemblies never touch them.
-- [ ] Manual check: Claude Code opened in the folder answers API-01 and HOW-04 from the generated `AGENTS.md` without being told where anything is.
+- [x] Manual check: Claude Code opened in the folder answers API-01 and HOW-04 from the generated `AGENTS.md` without being told where anything is.
 - [x] `scripts/agent-run.py` passes from a fresh build with the generated `AGENTS.md` (Claude Code, `--model sonnet`): 17 of 17, median at most 4, and per question no worse than the 2026-10-25 run with the strengthened hand-written one (ticket 29's comments). That closes ticket 29's criterion 7.
 
 ## Comments
@@ -50,3 +50,5 @@ Two questions are one call over the ticket 29 rerun, so "per question no worse" 
 An earlier run with an intermediate wording also passed: 17 of 17, median 3, with API-01 and SOL-04 one call over. Criterion 5 (manual check) is open. In both runs, API-01 and HOW-04 reached the expected page from a session opened in the folder, with no hint where to look.
 
 **2026-10-25, closed.** The user accepted the one-call differences on TERM-01 and FIG-01 as run-to-run noise, which ticks criterion 6, and closed the ticket. Criterion 5, the manual check in Claude Code, is the user's to do and stays unticked until it is recorded.
+
+**2026-10-25, manual check.** Passed, by the user. Claude Code opened in the folder worked from the generated `AGENTS.md` without being told where anything is, and built working macros.
