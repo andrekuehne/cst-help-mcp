@@ -98,7 +98,8 @@ def _asset(folder: Path, src: str, files: ReleaseFiles, by_hash: dict[str, Asset
 def _convert(folder: Path, asset_id: str, src: str, path: Path, data: bytes) -> Asset:
     svg = path.suffix.lower() == ".svg"
     if svg:
-        data = resvg_py.svg_to_bytes(svg_path=str(path))
+        # CSS's 96 dpi: by default resvg gives an SVG sized in mm, as Sphinx's figures are, no size.
+        data = resvg_py.svg_to_bytes(svg_path=str(path), dpi=96)
     with Image.open(io.BytesIO(data)) as image:
         image.load()
         kept = None if svg else _KEPT_FORMATS.get(image.format or "")

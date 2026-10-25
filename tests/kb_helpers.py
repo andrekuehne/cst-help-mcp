@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,8 @@ SOLVER_HF = "vba_3d/special_vbasolver/special_vbasolver_solver_object.htm.md"
 VBA_3D = "Online Help/mergedProjects/VBA_3D"
 VBA_OVERVIEW = "Online Help/vba"
 WINWRAP = "Online Help/sax_basic"
+SPHINX = "Online Help/Python"
+PYTHON_OVERVIEW = "Online Help/mergedProjects/Python"
 # The help projects a cst-release Source expects in a release folder.
 PROJECTS = (
     VBA_3D,
@@ -24,12 +27,14 @@ PROJECTS = (
     "Online Help/simulation_acceleration",
     VBA_OVERVIEW,
     WINWRAP,
+    SPHINX,
+    PYTHON_OVERVIEW,
 )
 
 
 @dataclass(frozen=True)
 class ProseBuild:
-    """A Knowledge Base holding the 3D Simulation and General Areas, with its build report."""
+    """A Knowledge Base built from some Areas of the corpus, with its build report."""
 
     kb: Path
     tree: Path  # the Collection's readable view
@@ -52,10 +57,13 @@ def topic(obj: str, member: str, description: str) -> str:
 def write_release(folder: Path, files: dict[str, str | bytes]) -> Path:
     """A synthetic release folder holding the given files, by path relative to the VBA 3D project.
 
-    The other projects the cst-release Source expects are created empty.
+    The other projects the cst-release Source expects are created empty; the Python reference
+    with an inventory that lists no pages.
     """
     for expected in PROJECTS:
         (folder / expected).mkdir(parents=True, exist_ok=True)
+    header = b"# Sphinx inventory version 2\n# Project: P\n# Version: 1\n# zlib\n"
+    (folder / SPHINX / "objects.inv").write_bytes(header + zlib.compress(b""))
     for rel, content in files.items():
         file = folder / VBA_3D / rel
         file.parent.mkdir(parents=True, exist_ok=True)

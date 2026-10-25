@@ -161,9 +161,21 @@ def _block(block: Block, links: list[Link], images: list[ImageRef]) -> list[tupl
         case "paragraph" | "figure":
             return [(_unmarked(inline(block.text)), [block.text])]
         case "list":
-            return [(f"- {inline(item)}", [item]) for item in block.items]
+            # A list inside another's item is indented under it.
+            return [(f"{'  ' * block.level}- {inline(item)}", [item]) for item in block.items]
         case "note":
             return [(f"> **Note:** {inline(block.text)}", [block.text])]
+        case "admonition":
+            # A quote: its title in bold, then its blocks, every line of them quoted.
+            quoted: list[tuple[str, list[str]]] = [(f"> **{inline(block.term)}**", [block.term])]
+            for child in block.blocks:
+                quoted.append((">", []))
+                for line, sources in _block(child, links, images):
+                    quoted.extend(
+                        (f"> {piece}" if piece else ">", sources if i == 0 else [])
+                        for i, piece in enumerate(line.split("\n"))
+                    )
+            return quoted
         case "field":
             term: tuple[str, list[str]] = (f"**{inline(block.term)}**", [block.term])
             return [term, *([(f": {inline(block.text)}", [block.text])] if block.text else [])]

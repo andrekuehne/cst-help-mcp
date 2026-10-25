@@ -28,6 +28,7 @@ from cst_help_mcp.navigation import (
 )
 from cst_help_mcp.render import render_markdown
 from cst_help_mcp.robohelp import PROSE, VBA, is_topic, read_topic
+from cst_help_mcp.sphinx import read_inventory, read_sphinx_page
 from cst_help_mcp.winwrap import read_winwrap_topic
 
 # Reads one topic's HTML into a Document: html, then source_path, locator, area and release by keyword.
@@ -44,18 +45,33 @@ class _Project:
     # When set, only these files directly in the folder are read, all as topics: they are
     # topics that don't load whtopic.js, among WebHelp's shell pages.
     topics: tuple[str, ...] = ()
+    # A Sphinx project: its inventory lists its pages, all topics, and its reader reads them with it.
+    sphinx: bool = False
 
     def files(self, release: Path) -> list[Path]:
         folder = release / self.folder
+        if self.sphinx:
+            return [release / page for page in read_inventory(release, self.folder).pages]
         if self.topics:
             return [folder / name for name in self.topics if (folder / name).is_file()]
         return sorted(p for p in folder.rglob("*") if p.is_file())
 
+    def reader(self, release: Path) -> _Reader:
+        if self.sphinx:
+            return partial(self.read, inventory=read_inventory(release, self.folder))
+        return self.read
+
+    @property
+    def all_topics(self) -> bool:
+        """Whether every file it lists is a topic, whatever it loads."""
+        return self.sphinx or bool(self.topics)
+
 
 # The help projects that the cst-release Source can read so far. The root project's own
 # subtrees make up the General Area, except its VBA overview, which macro questions need in
-# VBA 3D. A topic published identically in several projects becomes a Document of the first
-# one listed here, so the ribbon topics belong to General.
+# VBA 3D, and its Python menu topics, which belong with the Python reference. A topic published
+# identically in several projects becomes a Document of the first one listed here, so the ribbon
+# topics belong to General.
 _CST_RELEASE_PROJECTS = (
     *(
         _Project("general", f"Online Help/{folder}", _READ_PROSE)
@@ -68,12 +84,14 @@ _CST_RELEASE_PROJECTS = (
             "simulation_acceleration",
         )
     ),
-    # The Python menu topics (CST Apps and user scripts) at the root of the help.
-    _Project("general", "Online Help", _READ_PROSE, topics=("menu.htm", "user_scipts.htm")),
     _Project("3d", "Online Help/mergedProjects/3D", _READ_PROSE),
     _Project("vba-3d", "Online Help/vba", _READ_PROSE),
     _Project("vba-3d", "Online Help/mergedProjects/VBA_3D", _READ_VBA),
     _Project("winwrap-basic", "Online Help/sax_basic", read_winwrap_topic),
+    _Project("python", "Online Help/Python", read_sphinx_page, sphinx=True),
+    _Project("python", "Online Help/mergedProjects/Python", _READ_PROSE),
+    # The Python menu topics (CST Apps and user scripts) at the root of the help.
+    _Project("python", "Online Help", _READ_PROSE, topics=("menu.htm", "user_scipts.htm")),
 )
 
 
@@ -250,11 +268,12 @@ def _read_source(
                 f"The structure of {source.path} is not recognised as a CST release folder: "
                 f"it has no '{project.folder}' project"
             )
+        read = project.reader(source.path)
         for file in project.files(source.path):
             rel = file.relative_to(source.path).as_posix()
             if not _selected(rel, source):
                 continue
-            if file.suffix.lower() != ".htm":
+            if not project.sphinx and file.suffix.lower() != ".htm":
                 # Images become Assets when a Document shows them.
                 if file.suffix.lower() not in _IMAGE_SUFFIXES:
                     report.unsupported[file.suffix.lower()] += 1
@@ -262,11 +281,11 @@ def _read_source(
             report.discovered += 1
             try:
                 html = file.read_text(encoding="utf-8")
-                if not (project.topics or is_topic(html)):
+                if not (project.all_topics or is_topic(html)):
                     report.skipped += 1
                     continue
                 found = True
-                doc = project.read(
+                doc = read(
                     html,
                     source_path=rel,
                     locator=locator_for(rel),

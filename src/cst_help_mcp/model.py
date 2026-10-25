@@ -12,7 +12,17 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 BlockKind = Literal[
-    "heading", "paragraph", "note", "list", "field", "code", "table", "figure", "api_signature", "equation"
+    "heading",
+    "paragraph",
+    "note",
+    "admonition",
+    "list",
+    "field",
+    "code",
+    "table",
+    "figure",
+    "api_signature",
+    "equation",
 ]
 LinkStatus = Literal["unresolved", "resolved", "external", "outside"]
 # A figure, a small inline icon, or an equation that exists only as an image (not transcribed, ADR 0006).
@@ -180,23 +190,28 @@ def plain(text: str) -> str:
 class Block:
     kind: BlockKind
     text: str = ""
-    level: int = 0
+    level: int = 0  # a heading's level; a list's nesting, 0 for a list inside no other
     items: list[str] = field(default_factory=list)
     rows: list[list[str]] = field(default_factory=list)
     # Each table cell's [rowspan, colspan], only for a table with merged cells.
     spans: list[list[list[int]]] = field(default_factory=list)
     language: str = ""
-    term: str = ""  # a field definition's field name; its description is the text
+    # A field definition's field name, its description being the text; or an admonition's title.
+    term: str = ""
+    blocks: list[Block] = field(default_factory=list)  # an admonition's content
 
     def images(self) -> list[int]:
         """The index into its Document's images of each image the block shows, in order."""
         if self.kind in ("code", "api_signature", "equation"):
             return []  # code and an equation's TeX are verbatim, never spans
         texts = [self.term, self.text, *self.items, *(cell for row in self.rows for cell in row)]
-        return [index for text in texts for _, index in image_spans(text)]
+        own = [index for text in texts for _, index in image_spans(text)]
+        return own + [index for block in self.blocks for index in block.images()]
 
     def plain_text(self) -> str:
         """The block's text without markup, for indexing."""
+        if self.kind == "admonition":
+            return "\n".join([plain(self.term), *(block.plain_text() for block in self.blocks)])
         if self.kind == "list":
             return "\n".join(plain(item) for item in self.items)
         if self.kind == "table":

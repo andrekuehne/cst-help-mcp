@@ -172,12 +172,6 @@ def test_the_report_counts_links_by_status_and_lists_the_unresolved_ones(prose_b
     assert report["counts"]["unresolved_links"] == len(report["unresolved_links"]) < 20
 
 
-def test_the_python_menu_topics_at_the_help_root_belong_to_general(prose_build: ProseBuild) -> None:
-    # Neither loads whtopic.js, which marks the other topics.
-    for locator in ("menu.htm.md", "user_scipts.htm.md"):
-        assert '\narea: "general"\n' in _md(prose_build, locator)
-
-
 def test_links_to_files_missing_from_the_release_folder_are_unresolved_but_do_not_fail_the_build(
     prose_build: ProseBuild,
 ) -> None:

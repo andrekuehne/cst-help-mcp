@@ -68,7 +68,11 @@ FOLDERS = {
     "advanced": "Command line, environment variables and other advanced topics",
     "license": "Licensing",
     "simulation_acceleration": "Simulation acceleration",
-    ".": "Python menu topics, at the top of the folder",
+    "python": (
+        "Python reference (`cst.interface`, `cst.results`, `cst.eda`, `cst.asymptotic`, `cst.radar`, "
+        "`cst.units`), one page per package, and its overview"
+    ),
+    ".": "Python menu topics (CST Apps, user scripts), at the top of the folder",
 }
 
 # What each entry file at the root of a Release folder holds.
@@ -98,6 +102,9 @@ ANATOMY = """\
   ```vba block, its `**Group**`, the description, `## Parameter Description` and `## Example`.
   `ww_00003.htm.md` lists the keywords by group. The operators (`Mod`, `And`, `Xor`, `^`) share
   one page, `ww_00179.htm.md`, and are not in `api.md`.
+- Python pages under `python/source/`: one page per package (`cst.results.html.md`), each class,
+  method, property and function under a heading with its dotted name and a ```python signature
+  block, then its description and `**Parameters**`. `python/main.html.md` covers setup.
 - Folder names in `3d/` say what a page is: `special_solvopt_*` solver and setup dialogs,
   `special_overview_*` overviews, `special_theory_*` theory, `special_postpr_*` post-processing,
   `special_process_*` parameter sweeps and optimisation, `common_*` shared across products."""
@@ -112,6 +119,9 @@ grep its title: `^title: "Solver Object`. Then read the page or the heading's se
 **A macro language keyword or built-in** (`Left$`, `Open`, `Print #`, file and string handling,
 `MsgBox`, dialogs): grep `api.md` for it, or the titles in `sax_basic/`. These are not CST objects;
 they are the WinWrap Basic language that every macro is written in.
+
+**A Python name** (`cst.results.ResultModule.get_run_ids`, a bare `get_run_ids`): grep `api.md`
+for it; a name's last parts are enough (`ResultModule.get_run_ids`).
 
 **A concept or how-to question**: work from the vendor's own vocabulary outward.
 1. Grep `keywords.md` for your main noun, case-insensitively. The index terms are the authors'
@@ -143,14 +153,14 @@ def rules(folders: list[ReleaseFolder]) -> str:
     release = folders[0].release
     if any("library" in f.pages for f in folders):
         documented = f"""\
-- If an identifier is in no page under `vba_3d/` or `sax_basic/` and nowhere in `library/`,
-  say that it is not documented in Release {release}. Never invent a method, its arguments or
-  its behaviour.
+- If an identifier is in no page under `vba_3d/`, `sax_basic/` or `python/` and nowhere in
+  `library/`, say that it is not documented in Release {release}. Never invent a method, its
+  arguments or its behaviour.
 - A member that code in `library/` uses but no page documents is an Undocumented Member: use it
   only knowingly, and say that it is one."""
     else:
         documented = f"""\
-- If an identifier is in no page under `vba_3d/` or `sax_basic/`, say that it is
+- If an identifier is in no page under `vba_3d/`, `sax_basic/` or `python/`, say that it is
   not documented in Release {release}. Never invent a method, its arguments or its behaviour.
   This folder holds no Library, so there is no Undocumented Member (one that Library code uses
   but no page documents) to find."""
