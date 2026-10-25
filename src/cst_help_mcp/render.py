@@ -57,6 +57,8 @@ def render_parts(doc: Document, copy: bool = False) -> list[Part]:
         "title": doc.title,
         "source": doc.source_path,
     }
+    if doc.pages:
+        front["pages"] = doc.pages
     for key, values in (
         ("toc_paths", doc.toc_paths),
         ("keywords", doc.keywords),

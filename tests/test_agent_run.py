@@ -1,7 +1,7 @@
 """The agent run (scripts/agent-run.py) counts tool calls to the first expected Document.
 
-A fake agent stands in for a real one: it prints Claude Code stream-json for a fixed route
-that reads AGENTS.md, greps, and reads the Solver page.
+A fake agent stands in for a real one: it prints Claude Code stream-json for a fixed route,
+such as one that reads AGENTS.md, greps, and reads the Solver page.
 """
 
 from __future__ import annotations
@@ -11,9 +11,10 @@ import json
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
-from kb_helpers import BENCHMARK, SOLVER_HF
+from kb_helpers import BENCHMARK, SOLVER_HF, ProseBuild
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "agent-run.py"
 
@@ -27,17 +28,24 @@ def _agent_run() -> ModuleType:
     return module
 
 
-def _fake_agent(tmp_path: Path) -> list[str]:
-    calls = [
-        ("Read", {"file_path": "AGENTS.md"}),
-        ("Grep", {"pattern": "^### FrequencyRange", "path": "vba_3d"}),
-        ("Read", {"file_path": SOLVER_HF}),
-        ("Read", {"file_path": "toc.md"}),
-    ]
-    events = [{"type": "system", "subtype": "init"}] + [
-        {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": n, "input": i}]}}
-        for n, i in calls
-    ]
+_SOLVER_ROUTE = [
+    ("Read", {"file_path": "AGENTS.md"}),
+    ("Grep", {"pattern": "^### FrequencyRange", "path": "vba_3d"}),
+    ("Read", {"file_path": SOLVER_HF}),
+    ("Read", {"file_path": "toc.md"}),
+]
+
+
+def _fake_agent(
+    tmp_path: Path, calls: list[tuple[str, dict[str, Any]]] = _SOLVER_ROUTE, failing: int | None = None
+) -> list[str]:
+    """The agent's command; the call numbered ``failing`` gets an error as its result."""
+    events: list[dict[str, Any]] = [{"type": "system", "subtype": "init"}]
+    for n, (name, arguments) in enumerate(calls, start=1):
+        use = {"type": "tool_use", "id": f"call-{n}", "name": name, "input": arguments}
+        events.append({"type": "assistant", "message": {"content": [use]}})
+        result = {"type": "tool_result", "tool_use_id": f"call-{n}", "is_error": n == failing}
+        events.append({"type": "user", "message": {"content": [result]}})
     agent = tmp_path / "fake_agent.py"
     agent.write_text(
         "import sys\nsys.stdin.read()\n" + "".join(f"print({json.dumps(json.dumps(e))})\n" for e in events),
@@ -91,3 +99,54 @@ def test_only_questions_whose_areas_are_built_are_scored(
     assert ids[:3] == ["API-01", "API-02", "API-03"]
     assert "API-04" not in ids
     assert "SOL-01" not in ids
+
+
+GETTING_STARTED = "manuals/CST Studio Suite - Getting Started.pdf"
+
+
+def _line_of(file: Path, text: str) -> int:
+    """The 1-based number of the line that is ``text``."""
+    return file.read_text(encoding="utf-8").splitlines().index(text) + 1
+
+
+@pytest.mark.parametrize(
+    ("read", "fails", "hit"),
+    [
+        # The text companion. Offsets and limits named as lines of the companion: "page-<n>" is a
+        # page's anchor line, "## page-<n>" its heading line, and "+1" the line after it.
+        ({"file_path": f"{GETTING_STARTED}.md", "offset": "page-12", "limit": 40}, False, True),
+        ({"file_path": f"{GETTING_STARTED}.md", "offset": 1, "limit": "## page-12 +1"}, False, True),
+        ({"file_path": f"{GETTING_STARTED}.md", "offset": 1, "limit": "## page-12"}, False, False),
+        ({"file_path": f"{GETTING_STARTED}.md", "offset": "page-30", "limit": 40}, False, False),
+        # The PDF, at pages that include page 12, or at others, or whole.
+        ({"file_path": GETTING_STARTED, "pages": "11-13"}, False, True),
+        ({"file_path": GETTING_STARTED, "pages": "12"}, False, True),
+        ({"file_path": GETTING_STARTED, "pages": "1-5"}, False, False),
+        ({"file_path": GETTING_STARTED}, False, True),
+        # A read that failed, as one of a PDF this long without pages does in Claude Code.
+        ({"file_path": GETTING_STARTED}, True, False),
+    ],
+)
+def test_a_read_of_a_manual_is_a_hit_only_when_it_reaches_the_given_page(
+    manuals_build: ProseBuild,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    read: dict[str, Any],
+    fails: bool,
+    hit: bool,
+) -> None:
+    folder = manuals_build.tree
+    companion = folder / f"{GETTING_STARTED}.md"
+    for key in ("offset", "limit"):
+        if isinstance(read.get(key), str):
+            line, _, after = read[key].partition(" +")
+            text = line if line.startswith("## ") else f'<a id="{line}"></a>'
+            number = _line_of(companion, text) + int(after or 0)
+            read[key] = number if key == "offset" else number - read["offset"] + 1
+    calls = [("Read", {"file_path": "AGENTS.md"}), ("Grep", {"pattern": "silent"}), ("Read", read)]
+    args = ["--folder", str(folder), "--questions", str(BENCHMARK), "--only", "PDF-02"]
+
+    _agent_run().main([*args, "--", *_fake_agent(tmp_path, calls, failing=3 if fails else None)])
+
+    out = capsys.readouterr().out
+    assert ("first expected read at call 3" in out) is hit, out

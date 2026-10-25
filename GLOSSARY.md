@@ -38,6 +38,10 @@ _Avoid_: input, adapter
 One help topic, one PDF, or one code or data file from the Library, within a Collection.
 _Avoid_: page, file, topic (except when speaking of RoboHelp itself)
 
+**Text Companion**:
+The Markdown beside a PDF Document that holds the text of each of its pages under a `page-<n>` anchor, named after the PDF with `.md` appended. It is the Document's Locator; agents grep it to find the page, then open the PDF at that page.
+_Avoid_: sidecar, extract, transcript
+
 **Alias**:
 Another source path under which the same Document was published identically; a link to an Alias reaches the Document.
 _Avoid_: duplicate, copy

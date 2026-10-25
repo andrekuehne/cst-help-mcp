@@ -15,9 +15,10 @@ event per line. With Claude Code:
 The transcripts are kept, so a run can be scored again with --rescore and no agent.
 
 A question is scorable when it is not scored by hand and every Area it names is built in the
-folder. A hit is a read of an expected Document or of a Document that lists it as an Alias.
-Any read of a PDF's text companion counts, whatever page it reaches; the page rule of
-docs/benchmark-draft.md waits until a PDF Area is built.
+folder. A hit is a read of an expected Document or of a Document that lists it as an Alias. For a
+PDF with a given page, the read must reach that page: a read of the text companion whose lines
+include some of the page's text below its heading, or a read of the PDF whose pages include it.
+A read that failed, such as one of a file too large to read whole, reaches nothing.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import statistics
 import subprocess
 import sys
@@ -37,6 +39,9 @@ from typing import Any
 from cst_help_mcp.locator import locator_for
 
 MEDIAN_LIMIT = 4
+# What Claude Code's Read tool reads of a file when it is given no offset or limit.
+READ_LIMIT = 2000
+_PAGE_HEADING = re.compile(r"## page-(\d+)")
 PROMPT = """\
 Answer this question about CST Studio Suite from the files in the current folder, which is the
 CST help converted to Markdown. Read AGENTS.md first. Use only your file tools (read, grep,
@@ -52,7 +57,33 @@ class Question:
     half: str
     text: str
     areas: tuple[str, ...]
-    sources: tuple[str, ...]  # source paths, relative to the corpus root
+    sources: tuple[tuple[str, int | None], ...]  # source paths, relative to the corpus root, and PDF pages
+
+
+@dataclass(frozen=True)
+class Target:
+    """An expected Document as the folder holds it, and for a PDF the page a read must reach."""
+
+    locator: str
+    page: int | None = None
+    lines: tuple[int, int] = (0, 0)  # for a page, the first and last line of its text in the companion
+
+    def reached_by(self, folder: Path, arguments: dict[str, Any]) -> bool:
+        """Whether a Read call with these arguments reads the Document, at its page if it has one."""
+        path = arguments.get("file_path")
+        if not isinstance(path, str):
+            return False
+        key = _key(folder / path)
+        if key == _key(folder / self.locator):
+            if self.page is None:
+                return True
+            first = int(arguments.get("offset") or 1)
+            last = first + int(arguments.get("limit") or READ_LIMIT) - 1
+            return first <= self.lines[1] and last >= self.lines[0]
+        if self.page is not None and key == _key(folder / self.locator.removesuffix(".md")):
+            pages = _pages(arguments.get("pages"))
+            return pages is None or self.page in pages
+        return False
 
 
 @dataclass
@@ -77,10 +108,18 @@ class Folder:
                 folder.documents[source.lower()] = locator
         return folder
 
-    def expected(self, question: Question) -> set[str]:
-        """The Locators of the question's expected Documents that the folder holds."""
-        locators = {self.documents.get(s.lower(), locator_for(s)) for s in question.sources}
-        return {loc for loc in locators if (self.path / loc).is_file()}
+    def expected(self, question: Question) -> set[Target]:
+        """The question's expected Documents that the folder holds."""
+        targets = set()
+        for source, page in question.sources:
+            locator = self.documents.get(source.lower(), locator_for(source))
+            if not (self.path / locator).is_file():
+                continue
+            if page is None:
+                targets.add(Target(locator))
+            elif lines := _page_lines(self.path / locator, page):
+                targets.add(Target(locator, page, lines))
+        return targets
 
 
 @dataclass(frozen=True)
@@ -147,7 +186,13 @@ def _parser() -> argparse.ArgumentParser:
 def _load(path: Path) -> list[Question]:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     return [
-        Question(q["id"], q["half"], q["question"], tuple(q["areas"]), tuple(s["path"] for s in q["sources"]))
+        Question(
+            q["id"],
+            q["half"],
+            q["question"],
+            tuple(q["areas"]),
+            tuple((s["path"], s.get("page")) for s in q["sources"]),
+        )
         for q in data["questions"]
         if q.get("confidence") != "rejected" and q.get("scored") != "by hand"
     ]
@@ -179,37 +224,75 @@ def _run(command: list[str], folder: Path, question: Question, timeout: float) -
 
 def tool_calls(output: str) -> list[tuple[str, dict[str, Any]]]:
     """The tool calls in a Claude Code stream-json transcript, in order, as (name, input)."""
+    return [(name, arguments) for name, arguments, _ in _calls(output)]
+
+
+def _calls(output: str) -> list[tuple[str, dict[str, Any], bool]]:
+    """The tool calls in a transcript as (name, input, failed): failed when its result is an error,
+    such as a Read of a file too large to read whole."""
     calls = []
+    failed = set()
     for line in output.splitlines():
         try:
             event = json.loads(line)
         except ValueError:
             continue
-        if not isinstance(event, dict) or event.get("type") != "assistant":
+        if not isinstance(event, dict) or event.get("type") not in ("assistant", "user"):
             continue
-        for item in event.get("message", {}).get("content", []):
-            if isinstance(item, dict) and item.get("type") == "tool_use":
-                calls.append((str(item.get("name")), item.get("input") or {}))
-    return calls
+        content = event.get("message", {}).get("content", [])
+        for item in content if isinstance(content, list) else []:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") == "tool_use":
+                calls.append((item.get("id"), str(item.get("name")), item.get("input") or {}))
+            elif item.get("type") == "tool_result" and item.get("is_error"):
+                failed.add(item.get("tool_use_id"))
+    return [(name, arguments, call_id in failed) for call_id, name, arguments in calls]
 
 
-def score(question: Question, output: str, folder: Path, expected: set[str]) -> Score:
-    calls = tool_calls(output)
-    targets = {_key(folder / loc) for loc in expected}
-    reads = [
-        _key(folder / path)
-        if name == "Read" and isinstance(path := arguments.get("file_path"), str)
-        else None
-        for name, arguments in calls
-    ]
+def score(question: Question, output: str, folder: Path, expected: set[Target]) -> Score:
+    calls = _calls(output)
+    # The arguments of each call that read a file, and {} for every other call and failed read.
+    read_arguments = [arguments if name == "Read" and not failed else {} for name, arguments, failed in calls]
     # Counts compare with the recorded runs only if call 1 was the AGENTS.md read.
-    note = "" if reads[:1] == [_key(folder / "AGENTS.md")] else "call 1 was not the AGENTS.md read"
+    agents_md = Target("AGENTS.md")
+    first = read_arguments[:1]
+    note = "" if first and agents_md.reached_by(folder, first[0]) else "call 1 was not the AGENTS.md read"
     if not calls:
         note = "no tool calls in the output"
-    for n, read in enumerate(reads, start=1):
-        if read in targets:
+    for n, arguments in enumerate(read_arguments, start=1):
+        if any(target.reached_by(folder, arguments) for target in expected):
             return Score(question, len(calls), n, note)
     return Score(question, len(calls), None, note)
+
+
+def _page_lines(companion: Path, page: int) -> tuple[int, int] | None:
+    """The first and last line of a page's text in a PDF's text companion, after its heading."""
+    lines = companion.read_text(encoding="utf-8").splitlines()
+    headings = [
+        (n, int(m[1])) for n, line in enumerate(lines, start=1) if (m := _PAGE_HEADING.fullmatch(line))
+    ]
+    for i, (first, number) in enumerate(headings):
+        if number == page:
+            # The section ends before the next page's anchor line, which precedes its heading.
+            last = headings[i + 1][0] - 2 if i + 1 < len(headings) else len(lines)
+            return first + 1, last
+    return None
+
+
+def _pages(pages: object) -> set[int] | None:
+    """The pages a Read of a PDF reads: a range such as "11-13", a page, or a list of them; None,
+    for all of them, when none are given."""
+    if not isinstance(pages, str) or not pages.strip():
+        return None
+    read: set[int] = set()
+    for part in pages.split(","):
+        first, _, last = part.strip().partition("-")
+        try:
+            read.update(range(int(first), int(last or first) + 1))
+        except ValueError:
+            continue
+    return read
 
 
 def _key(path: Path) -> str:

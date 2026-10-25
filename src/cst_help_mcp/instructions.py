@@ -72,6 +72,10 @@ FOLDERS = {
         "Python reference (`cst.interface`, `cst.results`, `cst.eda`, `cst.asymptotic`, `cst.radar`, "
         "`cst.units`), one page per package, and its overview"
     ),
+    "manuals": (
+        "Word manuals (Getting Started: installation, licensing, first steps; High Frequency "
+        "Simulation: workflow and solver choice), each a PDF with a `.pdf.md` text companion"
+    ),
     ".": "Python menu topics (CST Apps, user scripts), at the top of the folder and copied into `python/`",
 }
 
@@ -130,6 +134,8 @@ for it; a name's last parts are enough (`ResultModule.get_run_ids`).
 3. Grep titles: `^title:.*discrete port` across `3d/`.
 4. Only then grep bodies, with the two or three most specific words, listing files only (no
    context lines), and narrow by a second word.
+5. For a choice (which port or solver, when one is good enough), also grep `manuals/`: the
+   manuals weigh the options against each other, the help describes each alone.
 Prefer pages whose title or Ribbon Path matches over pages that merely mention the words. Read the
 one or two most likely pages. The defining page is usually the dialog (`special_solvopt_*`) for
 settings, the overview (`special_overview_*`) for concepts.
@@ -139,6 +145,12 @@ settings, the overview (`special_overview_*`) for concepts.
 **Which VBA call does what a dialog does**: find the dialog page in `3d/`, then grep the dialog's
 title words in `vba_3d/` titles; dialog and object usually share a name (Solver Parameters and
 `Solver Object`, Port and `Port Object`).
+
+**A manual** (installation, the workflow of a solver, choosing between solvers or ports): grep the
+text companions in `manuals/`, the `.pdf.md` files, which hold each page's text under a
+`## page-<n>` heading. A hit's page is the nearest such heading above its line; grep with line
+numbers to find both. Read that page's section, then open the PDF beside it at that page with your read tool when the layout, a
+table or a figure matters. Cite the PDF and its page.
 
 **Theory and equations**: `special_overview_*` and `special_theory_*` pages in `3d/`. TeX is inline
 as `$…$` or `\\begin{equation}`; where an equation is an image, open it.
@@ -172,7 +184,7 @@ def rules(folders: list[ReleaseFolder]) -> str:
 - Cite the file path and the Release of every page you rely on.
 {documented}
 - Some answers are only in a figure. Open the image file with your read tool; equation images are
-  not transcribed, so look rather than guess."""
+  not transcribed, so look rather than guess. A manual's figures are only in its PDF."""
 
 
 def agents_md(folder: ReleaseFolder) -> str:

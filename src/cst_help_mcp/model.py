@@ -274,6 +274,10 @@ class Document:
     # Folders of the tree where its Markdown is also written, so that a grep confined to its Area's
     # folder finds a Document whose Locator lies outside it.
     copied_to: list[str] = field(default_factory=list)
+    # The path in the tree where the source file itself is copied as it is, beside its Markdown,
+    # such as a manual's PDF; and its number of pages.
+    original: str = ""
+    pages: int = 0
     generated: bool = False  # written in an agent session, such as a Guide (ADR 0010)
     heuristic: bool = False  # found by the build's heuristics, such as Usages (ADR 0012)
 

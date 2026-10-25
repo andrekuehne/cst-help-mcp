@@ -172,7 +172,8 @@ There is no server, no database and no ranking (ADR 0014). A client without file
   - lowercase every path segment;
   - collapse each run of characters outside `a–z 0–9 . _ - + ^` to one `-`, and trim `-` at segment ends;
   - append `.md` to the full file name.
-- **Copied files** (Library code, Material Definitions, PDFs) keep their original names and folders; their Locator is their path.
+- **Copied files** (Library code, Material Definitions) keep their original names and folders; their Locator is their path.
+- **PDFs** keep their original names in their Area's folder (`manuals/CST Studio Suite - Getting Started.pdf`); their Locator is their Text Companion beside them, the PDF's path with `.md` appended.
 - **Collisions** stop the build.
 - **Anchors** are the source's own ids where present. Otherwise they're generated: from the member name for API Entries, from headings elsewhere, and `page-<n>` for PDF pages.
 - **Original source paths** are always kept in frontmatter.

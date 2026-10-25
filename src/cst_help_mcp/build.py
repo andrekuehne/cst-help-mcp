@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import shutil
 from collections import Counter
 from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass, field
@@ -26,6 +27,7 @@ from cst_help_mcp.navigation import (
     read_navigation,
     resolve_navigation,
 )
+from cst_help_mcp.pdf import read_manual
 from cst_help_mcp.render import render_markdown
 from cst_help_mcp.robohelp import PROSE, VBA, is_topic, read_topic
 from cst_help_mcp.sphinx import read_inventory, read_sphinx_page
@@ -97,6 +99,11 @@ _CST_RELEASE_PROJECTS = (
     _Project("python", "Online Help", _READ_PROSE, topics=("menu.htm", "user_scipts.htm"), copy_to="python"),
 )
 
+
+# The Word manuals in the release folder that the cst-release Source reads so far, into Area
+# manuals as their PDFs with text companions.
+_MANUALS_FOLDER = "Documentation"
+_MANUALS = ("CST Studio Suite - High Frequency Simulation.pdf", "CST Studio Suite - Getting Started.pdf")
 
 _IMAGE_SUFFIXES = frozenset((".png", ".gif", ".jpg", ".jpeg", ".bmp", ".svg", ".ico"))
 
@@ -228,7 +235,7 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
         assets, report.missing_assets = write_assets(staging / layout.TREE, docs, files)
         report.assets = len(assets)
         layout.write_json(staging / layout.ASSETS_FILE, [asdict(asset) for asset in assets])
-        _write_tree(staging / layout.TREE, docs)
+        _write_tree(staging / layout.TREE, docs, files)
         _write_navigation(staging, navigation)
         layout.write_api_entries(
             staging,
@@ -304,6 +311,26 @@ def _read_source(
             if project.copy_to:
                 doc.copied_to.append(project.copy_to)
             yield doc
+    for name in _MANUALS:
+        rel = f"{_MANUALS_FOLDER}/{name}"
+        if not (source.path / rel).is_file() or not _selected(rel, source):
+            continue
+        report.discovered += 1
+        found = True
+        try:
+            doc = read_manual(
+                source.path / rel,
+                source_path=rel,
+                locator=f"manuals/{name}.md",
+                area="manuals",
+                release=collection.release,
+            )
+        except Exception as e:  # noqa: BLE001
+            # A manual that can't be read, such as one without a text layer, is a reported failure.
+            report.failures.append(Failure(rel, f"{type(e).__name__}: {e}"))
+            continue
+        report.converted += 1
+        yield doc
     if not found:
         raise BuildError(
             f"No topics found for collection '{collection.name}' in {source.path} "
@@ -352,13 +379,16 @@ def _merge_aliases(docs: list[Document]) -> list[Document]:
     return list(kept.values())
 
 
-def _write_tree(tree: Path, docs: list[Document]) -> None:
-    """Write each Document's Markdown; the model itself is not kept (ADR 0014)."""
+def _write_tree(tree: Path, docs: list[Document], files: ReleaseFiles) -> None:
+    """Write each Document's Markdown, and its source file where that is copied as it is; the model
+    itself is not kept (ADR 0014)."""
     tree.mkdir(parents=True, exist_ok=True)
     for doc in docs:
         md = tree / doc.locator
         md.parent.mkdir(parents=True, exist_ok=True)
         md.write_text(render_markdown(doc), encoding="utf-8", newline="\n")
+        if doc.original and (original := files.find(doc.source_path)):
+            shutil.copyfile(original, tree / doc.original)
         for path in _copies(doc):
             (tree / path).parent.mkdir(parents=True, exist_ok=True)
             (tree / path).write_text(render_markdown(doc, copy=True), encoding="utf-8", newline="\n")
