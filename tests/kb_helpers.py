@@ -15,6 +15,8 @@ VBA_OVERVIEW = "Online Help/vba"
 WINWRAP = "Online Help/sax_basic"
 SPHINX = "Online Help/Python"
 PYTHON_OVERVIEW = "Online Help/mergedProjects/Python"
+# The Library folders a cst-release Source expects in a release folder.
+LIBRARY_FOLDERS = ("Library/Macros", "Library/Result Templates", "Library/Includes")
 # The help projects a cst-release Source expects in a release folder.
 PROJECTS = (
     VBA_3D,
@@ -57,10 +59,10 @@ def topic(obj: str, member: str, description: str) -> str:
 def write_release(folder: Path, files: dict[str, str | bytes]) -> Path:
     """A synthetic release folder holding the given files, by path relative to the VBA 3D project.
 
-    The other projects the cst-release Source expects are created empty; the Python reference
-    with an inventory that lists no pages.
+    The other projects and Library folders the cst-release Source expects are created empty; the
+    Python reference with an inventory that lists no pages.
     """
-    for expected in PROJECTS:
+    for expected in (*PROJECTS, *LIBRARY_FOLDERS):
         (folder / expected).mkdir(parents=True, exist_ok=True)
     header = b"# Sphinx inventory version 2\n# Project: P\n# Version: 1\n# zlib\n"
     (folder / SPHINX / "objects.inv").write_bytes(header + zlib.compress(b""))

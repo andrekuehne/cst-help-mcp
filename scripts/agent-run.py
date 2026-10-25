@@ -15,8 +15,8 @@ event per line. With Claude Code:
 The transcripts are kept, so a run can be scored again with --rescore and no agent.
 
 A question is scorable when it is not scored by hand and every Area it names is built in the
-folder. A hit is a read of an expected Document or of a Document that lists it as an Alias. For a
-PDF with a given page, the read must reach that page: a read of the text companion whose lines
+folder; each folder of the copied Library counts as an Area. A hit is a read of an expected
+Document or of a Document that lists it as an Alias. For a PDF with a given page, the read must reach that page: a read of the text companion whose lines
 include some of the page's text below its heading, or a read of the PDF whose pages include it.
 A read that failed, such as one of a file too large to read whole, reaches nothing.
 """
@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from cst_help_mcp.library import SOURCE_FOLDER, TREE_FOLDER, library_locator
 from cst_help_mcp.locator import locator_for
 
 MEDIAN_LIMIT = 4
@@ -107,13 +108,21 @@ class Folder:
             folder.areas.update(front.get("alias_areas", []))
             for source in [front["source"], *front.get("aliases", [])]:
                 folder.documents[source.lower()] = locator
+        # The Library's files are copied, without frontmatter; each of its folders counts as an
+        # Area, named as the benchmark names it ("Result Templates" is result-templates).
+        library = path / TREE_FOLDER
+        if library.is_dir():
+            folder.areas.update(p.name.lower().replace(" ", "-") for p in library.iterdir() if p.is_dir())
         return folder
 
     def expected(self, question: Question) -> set[Target]:
         """The question's expected Documents that the folder holds."""
         targets = set()
         for source, page in question.sources:
-            locator = self.documents.get(source.lower(), locator_for(source))
+            if source.startswith(f"{SOURCE_FOLDER}/"):
+                locator = library_locator(source)
+            else:
+                locator = self.documents.get(source.lower(), locator_for(source))
             if not (self.path / locator).is_file():
                 continue
             if page is None:

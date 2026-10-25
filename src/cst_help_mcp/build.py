@@ -17,6 +17,7 @@ from cst_help_mcp.assembly import assemble
 from cst_help_mcp.assets import write_assets
 from cst_help_mcp.config import CollectionConfig, SourceConfig, load_config
 from cst_help_mcp.errors import BuildError
+from cst_help_mcp.library import Library, read_library, write_library
 from cst_help_mcp.links import Inventory, LinkReport, ReleaseFiles, SourceLink, resolve_links
 from cst_help_mcp.locator import locator_for
 from cst_help_mcp.model import Document, LinkStatus
@@ -208,17 +209,22 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
     config = load_config(config_path)
     collection = config.collection(collection_name)
     report = BuildReport()
-    docs = [doc for source in collection.sources for doc in _read_source(collection, source, report)]
+    docs: list[Document] = []
+    library = Library()
+    for source in collection.sources:
+        found = _read_library(source, library, report)
+        docs.extend(_read_source(collection, source, report, library_found=found))
     _check_locators(docs)
     release_folders = [source.path for source in collection.sources]
     navigation = read_navigation(release_folders)
     apply_navigation(docs, navigation)
+    unmerged = len(docs)
     docs = _merge_aliases(docs)
-    report.aliases = report.converted - len(docs)
+    report.aliases = unmerged - len(docs)
     report.unpaired_math = [
         SourceUnpairedMath(doc.source_path, u.delimiter, u.context) for doc in docs for u in doc.unpaired_math
     ]
-    if not docs:
+    if not docs and not library.copied:
         raise BuildError(
             f"No Documents could be converted for collection '{collection.name}': {_listed(report)}"
         )
@@ -236,6 +242,9 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
         report.assets = len(assets)
         layout.write_json(staging / layout.ASSETS_FILE, [asdict(asset) for asset in assets])
         _write_tree(staging / layout.TREE, docs, files)
+        report.failures.extend(Failure(*f) for f in write_library(staging / layout.TREE, library))
+        if library.files:
+            layout.write_library_lines(staging, [file.line for file in library.files])
         _write_navigation(staging, navigation)
         layout.write_api_entries(
             staging,
@@ -250,7 +259,7 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
             collection=collection.name,
             release=collection.release,
             failed=report.failed,
-            documents=[doc.locator for doc in docs],
+            documents=[doc.locator for doc in docs] + [file.line.locator for file in library.copied],
             files=layout.file_hashes(staging),
         )
         manifest.write(staging)
@@ -265,12 +274,31 @@ def _listed(report: BuildReport, limit: int = 5) -> str:
     return listed + more
 
 
-def _read_source(
-    collection: CollectionConfig, source: SourceConfig, report: BuildReport
-) -> Iterator[Document]:
+def _read_library(source: SourceConfig, library: Library, report: BuildReport) -> bool:
+    """Add the Source's Library files to ``library``; whether the filters take any."""
+    _check_release(source)
+    found = read_library(source.path, partial(_selected, source=source))
+    report.discovered += len(found.files) + len(found.failures)
+    report.converted += len(found.copied)
+    report.skipped += len(found.files) - len(found.copied)  # scrambled Macros, listed but not copied
+    report.failures.extend(Failure(*f) for f in found.failures)
+    report.unsupported.update(found.unsupported)
+    library.extend(found)
+    return bool(found.files or found.failures)
+
+
+def _check_release(source: SourceConfig) -> None:
     if not (source.path / "Online Help").is_dir():
         raise BuildError(f"{source.path} is not a CST release folder: it has no 'Online Help' folder")
-    found = False
+
+
+def _read_source(
+    collection: CollectionConfig, source: SourceConfig, report: BuildReport, *, library_found: bool
+) -> Iterator[Document]:
+    """The Source's help topics and manuals as Documents; ``library_found`` says whether its
+    Library already gave the filters something, so that finding no topic is not an error."""
+    _check_release(source)
+    found = library_found
     for project in _CST_RELEASE_PROJECTS:
         folder = source.path / project.folder
         if not folder.is_dir():

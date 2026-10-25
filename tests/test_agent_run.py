@@ -176,3 +176,21 @@ def test_a_read_of_a_manual_is_a_hit_only_when_it_reaches_the_given_page(
 
     out = capsys.readouterr().out
     assert ("first expected read at call 3" in out) is hit, out
+
+
+def test_a_library_question_is_a_hit_when_its_file_is_read(
+    library_build: ProseBuild, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    touchstone = "library/Result Templates/S-Parameters/- Touchstone Export^+MWS+DS.rtp"
+    route = [
+        ("Read", {"file_path": "AGENTS.md"}),
+        ("Grep", {"pattern": "Touchstone", "path": "library.md"}),
+        ("Read", {"file_path": touchstone}),
+    ]
+    args = ["--folder", str(library_build.tree), "--questions", str(BENCHMARK), "--only", "LIB-02,LIB-03"]
+
+    _agent_run().main([*args, "--", *_fake_agent(tmp_path, route)])
+
+    out = capsys.readouterr().out
+    assert "LIB-02    held-out  MISS, 3 calls" in out
+    assert "LIB-03    tuning    first expected read at call 3, 3 calls" in out

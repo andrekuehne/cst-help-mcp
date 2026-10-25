@@ -126,6 +126,20 @@ def test_a_missing_entry_file_is_reported(kb: Path, capsys: pytest.CaptureFixtur
     assert "cst-2024/keywords.md is missing; run cst-help assemble to restore it" in out
 
 
+def test_a_missing_library_md_is_reported(
+    corpus_2024: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = write_config(tmp_path / "cst-help.toml", tmp_path / "kb", corpus_2024, ["Library/Includes/*"])
+    build_collection(config, "cst-2024")
+    assert _validate(tmp_path / "kb", capsys)[0] == 0
+    (tmp_path / "kb" / "cst-2024" / "library.md").unlink()
+
+    code, out = _validate(tmp_path / "kb", capsys)
+
+    assert code == 1
+    assert "cst-2024/library.md is missing; run cst-help assemble to restore it" in out
+
+
 def test_a_page_whose_link_target_is_gone_is_reported_through_the_link_too(
     kb: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -1,7 +1,7 @@
 """Where a Knowledge Base keeps its Builds, assemblies and the active pointer (ADR 0009).
 
     <kb>/builds/<collection>/<build id>/   one immutable Build: build.json, report.json, navigation.json,
-                                           api.json, assets.json, tree/
+                                           api.json, library.json, assets.json, tree/
     <kb>/assemblies/<assembly id>/         one assembly: assembly.json, naming the Build of each Collection
     <kb>/active.json                       the pointer to the active assembly, replaced atomically
     <kb>/<collection>/                     the readable view: the active Build's tree, the entry files
@@ -50,6 +50,9 @@ ENTRY_FILES: dict[NavTree, tuple[str, str]] = {
 # The API Entries a Build found, beside its tree, and the entry file assembly lists them in.
 API_FILE = "api.json"
 API_ENTRY_FILE = "api.md"
+# The Library files a Build copied or listed, beside its tree, and the entry file that lists them.
+LIBRARY_FILE = "library.json"
+LIBRARY_ENTRY_FILE = "library.md"
 # The workspace files that assembly writes at the root of a readable view (ADR 0013).
 AGENTS_FILE = "AGENTS.md"
 CLAUDE_FILE = "CLAUDE.md"
@@ -252,6 +255,29 @@ def read_api_entries(build: Path) -> list[ApiLine]:
     """The API Entries a Build found; none for a Build without them."""
     api_file = build / API_FILE
     return [ApiLine(**entry) for entry in read_json(api_file)] if api_file.is_file() else []
+
+
+@dataclass(frozen=True)
+class LibraryLine:
+    """One Library file as library.md lists it."""
+
+    locator: str  # its path in the tree, where a scrambled Macro would be
+    kind: str
+    display_name: str  # the menu path and Display Name: "Results / Farfield / Farfield Plot"
+    application_filter: str  # "+MWS+DS", or "" for none
+    variants: list[str]  # the file names of its Variants
+    description: str  # its first comment line
+    helpers: list[str]  # an Include's public procedures
+
+
+def write_library_lines(build: Path, lines: list[LibraryLine]) -> None:
+    write_json(build / LIBRARY_FILE, [asdict(line) for line in lines])
+
+
+def read_library_lines(build: Path) -> list[LibraryLine]:
+    """The Library files a Build lists; none for a Build without a Library."""
+    library_file = build / LIBRARY_FILE
+    return [LibraryLine(**line) for line in read_json(library_file)] if library_file.is_file() else []
 
 
 def assembly_builds(assembly: Path) -> dict[str, str]:

@@ -178,6 +178,16 @@ def manuals_build(corpus_2024: Path, tmp_path_factory: pytest.TempPathFactory) -
 
 
 @pytest.fixture(scope="session")
+def library_build(corpus_2024: Path, tmp_path_factory: pytest.TempPathFactory) -> ProseBuild:
+    """The Library's Macros, Result Templates and Includes, built once per test session."""
+    root = tmp_path_factory.mktemp("library-kb")
+    config = write_config(root / "cst-help.toml", root / "kb", corpus_2024, ["Library/*"])
+    result = build_collection(config, "cst-2024")
+    report = json.loads(result.report_path.read_text(encoding="utf-8"))
+    return ProseBuild(root / "kb", root / "kb" / "cst-2024", report)
+
+
+@pytest.fixture(scope="session")
 def winwrap_kb(corpus_2024: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
     """A Knowledge Base holding the WinWrap Basic Area, built once per test session in a temporary folder."""
     root = tmp_path_factory.mktemp("winwrap-kb")

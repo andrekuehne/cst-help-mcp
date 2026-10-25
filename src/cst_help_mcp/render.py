@@ -7,7 +7,7 @@ import json
 import re
 from dataclasses import dataclass, replace
 
-from cst_help_mcp.layout import ApiLine
+from cst_help_mcp.layout import ApiLine, LibraryLine
 
 # The start of a line that Markdown reads as a block: a bullet, a heading or a quote, or the number
 # of an ordered list item, whose "." or ")" is what gets escaped.
@@ -133,8 +133,42 @@ def render_api(release: str, entries: list[ApiLine]) -> str:
         # The Locator is code, not a link, so that a grep line stays short.
         locator = f"{entry.locator}#{entry.anchor}"
         cells = [entry.qualified_name, entry.area, _code(signature), _code(locator)]
-        lines.append("| " + " | ".join(c.replace("|", "\\|") for c in cells) + " |")
+        lines.append(_row(cells))
     return "\n".join(lines) + "\n"
+
+
+def render_library(release: str, lines: list[LibraryLine]) -> str:
+    """The entry file library.md: one Library file per line, under a heading per Library folder.
+
+    An Include's line names its Helpers, where a Macro's or Result Template's names its Application
+    Filter and Variants.
+    """
+    out = [*_frontmatter({"release": release, "title": "Library"}), "# Library", ""]
+    by_folder: dict[str, list[LibraryLine]] = {}
+    for line in sorted(lines, key=lambda line: line.locator.lower()):
+        # The Library folder below library/, such as Macros.
+        by_folder.setdefault(line.locator.split("/")[1], []).append(line)
+    for folder, folder_lines in by_folder.items():
+        includes = all(line.kind == "Include" for line in folder_lines)
+        header = ["Path", "Kind", "Name" if includes else "Menu path and Display Name"]
+        header += ["Helpers"] if includes else ["Application Filter", "Variants"]
+        out += [f"## {folder}", "", _row([*header, "First comment"])]
+        out.append("|" + "---|" * (len(header) + 1))
+        for line in folder_lines:
+            cells = [_code(line.locator), line.kind, line.display_name]
+            if includes:
+                cells.append(", ".join(line.helpers))
+            else:
+                cells += [line.application_filter, ", ".join(_code(v) for v in line.variants)]
+            cells.append(line.description)
+            out.append(_row(cells))
+        out.append("")
+    return "\n".join(out)
+
+
+def _row(cells: list[str]) -> str:
+    """A Markdown table row, with each cell's ``|`` escaped."""
+    return "| " + " | ".join(c.replace("|", "\\|") for c in cells) + " |"
 
 
 def _code(text: str) -> str:

@@ -17,7 +17,7 @@ from pathlib import Path
 from cst_help_mcp import layout
 from cst_help_mcp.errors import KnowledgeBaseError
 from cst_help_mcp.instructions import ReleaseFolder, agents_md
-from cst_help_mcp.render import render_api, render_navigation
+from cst_help_mcp.render import render_api, render_library, render_navigation
 
 
 @dataclass(frozen=True)
@@ -88,13 +88,15 @@ def _move_workspace(old: Path, new: Path) -> None:
 
 
 def _write_entry_files(view: Path, build: Path) -> None:
-    """Write ``toc.md`` and ``keywords.md`` from the navigation trees the Build found, and ``api.md``
-    from its API Entries."""
+    """Write ``toc.md`` and ``keywords.md`` from the navigation trees the Build found, ``api.md``
+    from its API Entries, and ``library.md`` from its Library files, if it has any."""
     release = layout.BuildManifest.read(build).release
     for tree, nodes in layout.read_navigation(build).items():
         name, title = layout.ENTRY_FILES[tree]
         _write(view / name, render_navigation(release, title, nodes))
     _write(view / layout.API_ENTRY_FILE, render_api(release, layout.read_api_entries(build)))
+    if library := layout.read_library_lines(build):
+        _write(view / layout.LIBRARY_ENTRY_FILE, render_library(release, library))
 
 
 def _write_workspace_files(view: Path, build: Path) -> None:
