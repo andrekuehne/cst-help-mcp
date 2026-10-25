@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Rebuilding a Collection never changes an existing Build, and a server started before the rebuild keeps answering from its Build.
 - [x] The build report counts discovered, converted, skipped and failed Documents, unresolved links, missing Assets and unsupported items. The CLI prints a summary.

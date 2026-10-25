@@ -4,7 +4,7 @@
 
 **Blocked by:** 08
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Every Asset records its caption or alt text, dimensions, kind (figure, icon or equation image) and the Documents that reference it.
 - [x] Inline icons stay as small images whose alt text comes from the file name. Logos and WebHelp chrome are dropped.

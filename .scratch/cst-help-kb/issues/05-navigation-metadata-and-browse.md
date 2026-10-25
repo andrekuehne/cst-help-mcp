@@ -4,7 +4,7 @@
 
 **Blocked by:** 02, 04
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Every RoboHelp project's navigation data parses after decoding the JS string escapes. Paths with backslashes and mixed case are resolved without regard to case.
 - [x] A Document listed in several places in the table of contents carries all of its paths.

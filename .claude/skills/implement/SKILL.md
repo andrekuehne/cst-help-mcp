@@ -15,3 +15,5 @@ Run typechecking regularly, single test files regularly, and the full test suite
 Once done, call the Skill tool with "code-review" to review the work.
 
 Commit your work to the current branch.
+
+Then close the ticket the way the issue tracker closes work.

@@ -4,7 +4,7 @@
 
 **Blocked by:** 05
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Dotted names, `$` and other punctuation in queries never cause errors.
 - [x] A partial identifier such as `MeshProp` matches through the trigram index.

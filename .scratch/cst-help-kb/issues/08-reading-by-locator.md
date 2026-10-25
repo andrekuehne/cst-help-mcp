@@ -4,7 +4,7 @@
 
 **Blocked by:** 02, 04
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Reading a Locator with an anchor returns that Section, and reading one without an anchor returns the Document.
 - [x] Long content is split into pages of about 8,000 tokens, and the cursor continues where the last page ended.

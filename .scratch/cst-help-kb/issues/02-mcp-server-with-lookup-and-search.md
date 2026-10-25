@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] The server serves exactly one Release, fixed at start with `--release`, defaulting to the newest. Every result names its Release (ADR 0005).
 - [x] The first 512 characters of the server instructions stand on their own: identifiers and Display Names go to `cst_help_lookup`, concepts to `cst_help_search`, and answers cite the Locator and Release. The instructions also give the "not documented" rule and the Knowledge Base path.

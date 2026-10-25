@@ -6,7 +6,7 @@ This is the thinnest path through every layer: configuration, the RoboHelp reade
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] The configuration is read from TOML. Missing or wrong paths fail with a clear message.
 - [x] VBA 3D topics become Documents in Area `vba-3d`. Their Locators follow ADR 0011, and a Locator collision stops the build.

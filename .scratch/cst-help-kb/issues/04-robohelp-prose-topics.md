@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Topic content is taken from between the logo header and the footer. WebHelp shell pages, breadcrumb scripts, footers, logos and spacer paragraphs are dropped.
 - [x] The per-project map from CSS class to block role turns prose held in `<h3>` into paragraphs, dialog field lists into field definitions, and "Note:" paragraphs into notes.

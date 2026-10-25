@@ -6,7 +6,7 @@ The runner is also the tool for tuning search. Ticket 06 tuned its field weights
 
 **Blocked by:** 01, 06
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] The machine-readable benchmark holds all 39 draft questions, keeps their ids, and stores no vendor text.
 - [x] Expected sources are mapped from source paths to Locators mechanically, and PDF pages to page anchors.
