@@ -53,12 +53,14 @@ def release_folders(kb_path: Path, release: str | None = None) -> list[ReleaseFo
 
 
 RULES = """\
+- **Grep finds pages; it never answers.** Before you answer, open every page you cite with your
+  read tool, even when the grep lines already seem to hold the answer. A snippet leaves out the
+  conditions, figures and exceptions around it. Pages are short; most are under 10 KB.
 - Cite the file path and the Release of every page you rely on.
 - If an identifier is in no page under `vba_3d/`, say it is not documented in this Release. Never
   invent a method, its arguments or its behaviour.
 - Some answers are only in a figure. Open the image file with your read tool; equation images are
-  not transcribed, so look rather than guess.
-- Read the page before answering from a grep snippet. Pages are short; most are under 10 KB."""
+  not transcribed, so look rather than guess."""
 
 ANATOMY = """\
 - `toc.md` is CST's table of contents as nested links; `keywords.md` is CST's author keyword
@@ -82,7 +84,8 @@ its title: `^title: "Solver Object`. Then read the page or the heading's section
 1. Grep `keywords.md` for your main noun, case-insensitively.
 2. Grep `toc.md` the same way to see the neighbourhood of pages.
 3. Grep titles: `^title:.*discrete port` across `3d/`.
-4. Only then grep bodies, with the two or three most specific words, listing files only.
+4. Only then grep bodies, with the two or three most specific words, listing files only (no
+   context lines); then read the best match.
 Prefer pages whose title or Ribbon Path matches over pages that merely mention the words. The
 defining page is usually the dialog (`special_solvopt_*`) for settings, the overview
 (`special_overview_*`) for concepts.

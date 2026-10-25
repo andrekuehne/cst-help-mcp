@@ -45,3 +45,27 @@ Criterion 7 is not met. Fresh build of the development `.kb` (1,514 Documents, n
 
 16 of 17 hits, median 4, maximum 6. SOL-04, the sidecar detour of the recorded run, dropped from 7 to 4. THEO-02 hit in one of three runs (call 4). In the two misses the agent grepped `Ludwig` with context in `3d/special_postpr/`, got the expected page's text in the snippets, and answered correctly with that page cited, without reading it, against the `AGENTS.md` rule to read before answering. SOL-03, HOW-04, TERM-01 and FIG-01 also took one call more than the recorded run. Open: whether a snippet answer from an expected page counts, or ticket 15's `AGENTS.md` should press the read harder.
 
+**2026-10-25, rerun.** The read rule was strengthened in the `.kb` copy of `AGENTS.md` and in `instructions.RULES` (wording in ticket 15's comments). THEO-02 then hit in three of three runs (calls 4, 6, 3), and a full run scored 17 of 17, median 4, maximum 6, PASS:
+
+| Id | First expected read / total calls | First run | Recorded Sonnet run |
+|---|---:|---:|---:|
+| API-01 | 3 / 4 | 3 | 3 |
+| API-02 | 4 / 4 | 3 | 4 |
+| API-03 | 4 / 5 | 3 | 3 |
+| SOL-01 | 5 / 7 | 4 | 4 |
+| SOL-02 | 4 / 8 | 4 | 4 |
+| SOL-03 | 4 / 8 | 4 | 3 |
+| SOL-04 | 6 / 7 | 4 | 7 |
+| HOW-01 | 4 / 5 | 3 | 3 |
+| HOW-02 | 4 / 5 | 4 | 4 |
+| HOW-03 | 3 / 4 | 3 | 3 |
+| HOW-04 | 4 / 4 | 4 | 3 |
+| TERM-01 | 4 / 5 | 4 | 4 |
+| TERM-02 | 6 / 6 | 5 | 5 |
+| THEO-01 | 4 / 5 | 4 | 4 |
+| THEO-02 | 5 / 5 | miss | 4 |
+| FIG-01 | 4 / 6 | 6 | 5 |
+| FIG-02 | 4 / 9 | 3 | 5 |
+
+Criterion 7 stays open: the generated `AGENTS.md` of ticket 15 is to carry the rule and repeat this run (a criterion there). Seven questions are a call or two above the recorded Sonnet run, three below; single runs vary by about that much.
+
