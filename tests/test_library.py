@@ -26,8 +26,8 @@ def test_only_the_text_files_and_the_dialog_bitmaps_are_copied(library_build: Pr
 
     suffixes = {p.suffix.lower() for p in library.rglob("*") if p.is_file()}
 
-    assert suffixes == {".mcr", ".mcs", ".rtp", ".bas", ".cls", ".txt", ".lib", ".png"}
-    assert sorted(p.name for p in library.iterdir()) == ["Includes", "Macros", "Result Templates"]
+    assert suffixes == {".mcr", ".mcs", ".rtp", ".bas", ".cls", ".txt", ".lib", ".png", ".py", ".json"}
+    assert sorted(p.name for p in library.iterdir()) == ["Includes", "Macros", "Python", "Result Templates"]
     assert library_build.report["unsupported"][".exe"] == 1
     assert library_build.report["unsupported"][".ppt"] == 7
 
@@ -119,3 +119,55 @@ def test_library_files_are_counted_as_converted_documents_and_never_as_aliases(
     )
     assert counts["converted"] == copied
     assert counts["aliases"] == 0
+
+
+APPS = "library/Python/lib/cstapps/apps"
+
+
+def test_library_md_lists_each_python_app_by_its_menu_name_with_its_modules(
+    library_build: ProseBuild,
+) -> None:
+    line = _line(library_build, f"{APPS}/pleos.json")
+
+    assert line.startswith(
+        f"| `{APPS}/pleos.json` | Python app | EDA / Place Lumped Elements on Schematic | "
+    )
+    modules = line.split(" | ")[4]
+    assert modules.startswith("`cstapps/apps/place_lumped_elements_on_schematic.py`, ")
+    assert "`cstapps/_impl/eda/place_lumped_elements_on_schematic.py`" in modules
+    assert (library_build.tree / APPS / "pleos.json").is_file()
+    assert (library_build.tree / APPS / "place_lumped_elements_on_schematic.py").is_file()
+    assert "| PCBS |" in _line(library_build, f"{APPS}/demo_pcbs_app.json")
+
+
+def test_only_python_modules_that_drive_cst_are_copied_and_the_rest_are_reported(
+    library_build: ProseBuild,
+) -> None:
+    python = library_build.tree / "library" / "Python"
+    emag = "lib/cstapps/_impl/eda/emag/_impl"
+
+    copied = {p.relative_to(python).as_posix() for p in python.rglob("*.py")}
+
+    assert f"{emag}/vba_snippets.py" in copied  # VBA in string literals, no import of cst
+    assert f"{emag}/mws.py" in copied  # import cst.interface
+    # Calls the schematic's VBA objects from Python: cmds.Block.Reset()
+    assert "lib/cstapps/_impl/circuits/drivers/design_studio/read.py" in copied
+    left_out = library_build.report["library_left_out"]
+    assert "Library/Python/lib/cstapps/__git_sha__.py" in left_out
+    assert "Library/Python/lib/cstapps/_impl/gui/table_widget.py" in left_out
+    assert len(copied) + len(left_out) == 82
+    assert library_build.report["counts"]["library_left_out"] == len(left_out)
+    assert not list(python.rglob("*.whl"))
+    assert library_build.report["unsupported"][".whl"] == 14
+    assert "End With" in (python / f"{emag}/vba_snippets.py").read_text(encoding="utf-8")
+
+
+def test_agents_md_says_vba_sent_from_python_is_found_in_the_string_literals(
+    library_build: ProseBuild,
+) -> None:
+    agents = (library_build.tree / "AGENTS.md").read_text(encoding="utf-8")
+
+    recipe = " ".join(agents.partition("**VBA sent from Python**")[2].partition("\n\n")[0].split())
+    assert "`add_to_history` or `execute_vba_code`" in recipe
+    assert "grep the string literals in `library/Python/`" in recipe
+    assert "a Python app's modules" in agents.partition("- `library.md`:")[2].partition("\n")[0]

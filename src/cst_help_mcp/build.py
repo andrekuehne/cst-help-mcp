@@ -142,6 +142,8 @@ class BuildReport:
     links: LinkReport = field(default_factory=LinkReport)
     navigation: NavigationReport = field(default_factory=NavigationReport)
     unsupported: Counter[str] = field(default_factory=Counter)  # files no reader handles, by extension
+    # The Library's Python modules that are not copied: neither an app's entry module nor driving CST.
+    library_left_out: list[str] = field(default_factory=list)
     api_entries: int = 0
 
     @property
@@ -178,6 +180,7 @@ class BuildReport:
                 "assets": self.assets,
                 "missing_assets": len(self.missing_assets),
                 "unsupported": sum(self.unsupported.values()),
+                "library_left_out": len(self.library_left_out),
                 "unpaired_math": len(self.unpaired_math),
             },
             "api_entries": self.api_entries,
@@ -190,6 +193,7 @@ class BuildReport:
             "unpaired_math": [asdict(u) for u in self.unpaired_math],
             "failures": [asdict(f) for f in self.failures],
             "unsupported": dict(sorted(self.unsupported.items())),
+            "library_left_out": self.library_left_out,
         }
 
 
@@ -283,6 +287,7 @@ def _read_library(source: SourceConfig, library: Library, report: BuildReport) -
     report.skipped += len(found.files) - len(found.copied)  # scrambled Macros, listed but not copied
     report.failures.extend(Failure(*f) for f in found.failures)
     report.unsupported.update(found.unsupported)
+    report.library_left_out.extend(found.python_left_out)
     library.extend(found)
     return bool(found.files or found.failures)
 

@@ -74,10 +74,10 @@ FOLDERS = {
         "`cst.units`), one page per package, and its overview"
     ),
     "manuals": (
-        "Word manuals (Getting Started: installation, licensing, first steps; High Frequency "
+        "Word manuals (Getting Started: installation, licensing; High Frequency "
         "Simulation: workflow and solver choice), each a PDF with a `.pdf.md` text companion"
     ),
-    TREE_FOLDER: "CST's Library: Macros, Result Templates and Includes, as VBA code",
+    TREE_FOLDER: "CST's Library: VBA Macros, Result Templates and Includes; Python apps",
     ".": "Python menu topics (CST Apps, user scripts), also copied into `python/`",
 }
 
@@ -93,7 +93,7 @@ ENTRY_FILES = {
     ),
     layout.LIBRARY_ENTRY_FILE: (
         "every Library file on one line: kind, menu path and Display Name, Application Filter, "
-        "Variants, first comment, Helpers"
+        "Variants, first comment, Helpers, a Python app's modules"
     ),
 }
 
@@ -104,9 +104,9 @@ ANATOMY = """\
   reached in the CST ribbon. Dialog fields are bold lines with a `: ` definition under them.
 - VBA pages under `vba_3d/`: one page per object, `## General Methods` and similar groups, then
   `### MethodName` with a ```vba signature block and the description.
-  `special_vba<topic>/..._object.htm.md` is one VBA object (for example
-  `special_vbasolver/special_vbasolver_solver_object.htm.md` is the `Solver` object), and
-  `common_vbaapp/` holds the application-level objects.
+  `special_vba<topic>/..._object.htm.md` is one VBA object
+  (`special_vbasolver/special_vbasolver_solver_object.htm.md` is `Solver`), and `common_vbaapp/`
+  holds the application-level objects.
 - WinWrap Basic pages under `sax_basic/`: file names are numbers (`ww_00069.htm.md`), so find a
   keyword by its title, `^title: "Dir\\$ Function`, or in `api.md`. Each has the syntax in a
   ```vba block, then `## Parameter Description` and `## Example`. `ww_00003.htm.md` lists the
@@ -140,21 +140,20 @@ for it; a name's last parts are enough (`ResultModule.get_run_ids`).
 3. Grep titles: `^title:.*discrete port` across `3d/`.
 4. Only then grep bodies, with the two or three most specific words, listing files only, and narrow
    by a second word.
-5. For a choice (which port or solver, when one is good enough), also grep `manuals/`: the
-   manuals weigh the options against each other, the help describes each alone.
+5. For a choice (which port or solver), also grep `manuals/`: the
+   manuals compare the options, the help describes each alone.
 Prefer pages whose title or Ribbon Path matches over pages that merely mention the words. Read the
 one or two most likely pages. The defining page is usually the dialog (`special_solvopt_*`) for
 settings, the overview (`special_overview_*`) for concepts.
 
 **Which VBA call does what a dialog does**: find the dialog page in `3d/`, then grep the dialog's
-title words in `vba_3d/` titles; dialog and object usually share a name (Solver Parameters and
-`Solver Object`, Port and `Port Object`).
+title words in `vba_3d/` titles; dialog and object usually share a name (Port and `Port Object`).
 
 **A manual** (installation, the workflow of a solver, choosing between solvers or ports): grep the
 text companions in `manuals/`, the `.pdf.md` files, which hold each page's text under a
 `## page-<n>` heading. A hit's page is the nearest such heading above its line; grep with line
-numbers to find both. Read that section; open the PDF at that page when the layout, a table or a
-figure matters. Cite the PDF and its page.
+numbers to find both. Read that section; open the PDF at that page when a table or figure
+matters. Cite the PDF and its page.
 
 **Theory and equations**: `special_overview_*` and `special_theory_*` pages in `3d/`. TeX is inline
 as `$…$` or `\\begin{equation}`; where an equation is an image, open it.
@@ -168,7 +167,10 @@ LIBRARY_RECIPES = """\
 **Working code**: grep `library/` for the API Entry or idiom, listing files only, or `library.md`
 for a menu path or Display Name; prefer the `+MWS` Variant. `'#include "X"` is the file
 `library/Includes/X`; a public procedure there (`GetLastResult_LIB`) is a Helper, not a
-documented CST API Entry. A dialog's `.bmp` is beside its Macro as a `.png`."""
+documented CST API Entry. A dialog's `.bmp` is beside its Macro as a `.png`.
+
+**VBA sent from Python** through `add_to_history` or `execute_vba_code`: grep the string literals
+in `library/Python/` for the VBA (`With Solver`)."""
 
 
 def recipes(folders: list[ReleaseFolder]) -> str:
@@ -196,9 +198,8 @@ def rules(folders: list[ReleaseFolder]) -> str:
   but no page documents) to find."""
     return f"""\
 - **Grep finds pages; it never answers.** Before you answer, open every page you cite with your
-  read tool, even when the grep lines already seem to hold the answer. A snippet leaves out the
-  conditions, figures and exceptions around it. Pages are short; most are under 10 KB. Grep
-  bodies with no context lines.
+  read tool, even when the grep lines seem to hold the answer. A snippet leaves out the
+  conditions, figures and exceptions around it. Grep bodies with no context lines.
 - Cite the file path and the Release of every page you rely on.
 {documented}
 - Some answers are only in a figure. Open the image file with your read tool; equation images are

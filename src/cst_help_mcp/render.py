@@ -150,13 +150,19 @@ def render_library(release: str, lines: list[LibraryLine]) -> str:
         by_folder.setdefault(line.locator.split("/")[1], []).append(line)
     for folder, folder_lines in by_folder.items():
         includes = all(line.kind == "Include" for line in folder_lines)
-        header = ["Path", "Kind", "Name" if includes else "Menu path and Display Name"]
-        header += ["Helpers"] if includes else ["Application Filter", "Variants"]
+        python = all(line.kind.startswith("Python") for line in folder_lines)
+        if python:
+            header = ["Path", "Kind", "Menu path or module", "Restricted to", "Modules (below lib/)"]
+        else:
+            header = ["Path", "Kind", "Name" if includes else "Menu path and Display Name"]
+            header += ["Helpers"] if includes else ["Application Filter", "Variants"]
         out += [f"## {folder}", "", _row([*header, "First comment"])]
         out.append("|" + "---|" * (len(header) + 1))
         for line in folder_lines:
             cells = [_code(line.locator), line.kind, line.display_name]
-            if includes:
+            if python:
+                cells += [line.restricted_to, ", ".join(_code(m) for m in line.modules)]
+            elif includes:
                 cells.append(", ".join(line.helpers))
             else:
                 cells += [line.application_filter, ", ".join(_code(v) for v in line.variants)]

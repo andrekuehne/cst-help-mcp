@@ -36,13 +36,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from cst_help_mcp.library import SOURCE_FOLDER, TREE_FOLDER, library_locator
+from cst_help_mcp.library import PYTHON_FOLDER, SOURCE_FOLDER, TREE_FOLDER, library_locator
 from cst_help_mcp.locator import locator_for
 
 MEDIAN_LIMIT = 4
 # What Claude Code's Read tool reads of a file when it is given no offset or limit.
 READ_LIMIT = 2000
 _PAGE_HEADING = re.compile(r"## page-(\d+)")
+_LIBRARY_AREAS = {PYTHON_FOLDER: "python-apps"}
 PROMPT = """\
 Answer this question about CST Studio Suite from the files in the current folder, which is the
 CST help converted to Markdown. Read AGENTS.md first. Use only your file tools (read, grep,
@@ -109,10 +110,15 @@ class Folder:
             for source in [front["source"], *front.get("aliases", [])]:
                 folder.documents[source.lower()] = locator
         # The Library's files are copied, without frontmatter; each of its folders counts as an
-        # Area, named as the benchmark names it ("Result Templates" is result-templates).
+        # Area, named as the benchmark names it ("Result Templates" is result-templates). Its
+        # Python folder is python-apps, apart from the help's python Area.
         library = path / TREE_FOLDER
         if library.is_dir():
-            folder.areas.update(p.name.lower().replace(" ", "-") for p in library.iterdir() if p.is_dir())
+            folder.areas.update(
+                _LIBRARY_AREAS.get(p.name, p.name.lower().replace(" ", "-"))
+                for p in library.iterdir()
+                if p.is_dir()
+            )
         return folder
 
     def expected(self, question: Question) -> set[Target]:

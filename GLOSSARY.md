@@ -92,6 +92,10 @@ _Avoid_: lib, library file
 A public procedure or variable defined in an Include, addressable by name. Library code relies on Helpers, but they are not part of the documented CST API and never count as API Entries; `AGENTS.md` says so.
 _Avoid_: lib function, utility, API
 
+**Python app**:
+A Python program in the Library that CST starts from a menu, described by a JSON descriptor that gives its menu path and the module it runs. Its modules drive CST through the `cst` package and send VBA as string literals through `add_to_history` or `execute_vba_code`.
+_Avoid_: CST App (the help's name for the menu), script
+
 **Material Definition**:
 A Library file that defines one named material of CST's material database, together with its electromagnetic and thermal properties. Its file name is the material's exact name.
 _Avoid_: material file, MTD

@@ -179,7 +179,7 @@ def manuals_build(corpus_2024: Path, tmp_path_factory: pytest.TempPathFactory) -
 
 @pytest.fixture(scope="session")
 def library_build(corpus_2024: Path, tmp_path_factory: pytest.TempPathFactory) -> ProseBuild:
-    """The Library's Macros, Result Templates and Includes, built once per test session."""
+    """The Library's Macros, Result Templates, Includes and Python apps, built once per test session."""
     root = tmp_path_factory.mktemp("library-kb")
     config = write_config(root / "cst-help.toml", root / "kb", corpus_2024, ["Library/*"])
     result = build_collection(config, "cst-2024")

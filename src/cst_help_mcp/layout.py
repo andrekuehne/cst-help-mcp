@@ -24,7 +24,7 @@ import stat
 import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, Any
@@ -268,6 +268,8 @@ class LibraryLine:
     variants: list[str]  # the file names of its Variants
     description: str  # its first comment line
     helpers: list[str]  # an Include's public procedures
+    modules: list[str] = field(default_factory=list)  # a Python app's modules, entry module first
+    restricted_to: str = ""  # the product a Python app's descriptor restricts it to, such as "PCBS"
 
 
 def write_library_lines(build: Path, lines: list[LibraryLine]) -> None:
