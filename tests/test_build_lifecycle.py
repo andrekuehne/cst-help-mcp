@@ -61,6 +61,7 @@ def test_the_tree_holds_only_what_agents_read_and_the_build_data_stays_beside_it
 
     build = tmp_path / "kb" / "builds" / "cst-2024" / result.build_id
     assert sorted(p.name for p in build.iterdir()) == [
+        "api.json",
         "assets.json",
         "build.json",
         "navigation.json",
@@ -69,8 +70,9 @@ def test_the_tree_holds_only_what_agents_read_and_the_build_data_stays_beside_it
     ]
     pages = ["vba_3d/widgets/gadget.htm.md", WIDGET]
     assert _files(build / "tree") == pages
-    # Assembly adds the entry files to the view.
-    assert _files(tmp_path / "kb" / "cst-2024") == ["keywords.md", "toc.md", *pages]
+    # Assembly adds the entry and workspace files to the view.
+    view = tmp_path / "kb" / "cst-2024"
+    assert _files(view) == ["AGENTS.md", "CLAUDE.md", "api.md", "keywords.md", "toc.md", *pages]
     assert not (tmp_path / "kb" / "index.sqlite").exists()
     assert [p.name for p in (tmp_path / "kb" / "assemblies").rglob("*") if p.is_file()] == ["assembly.json"]
 

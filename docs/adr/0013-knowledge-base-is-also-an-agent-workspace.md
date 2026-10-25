@@ -1,6 +1,6 @@
 # The Knowledge Base is also a ready-to-open agent workspace
 
-**Confirmed by ADR 0014.** The workspace is the product. There is no MCP configuration to write.
+**Confirmed by ADR 0014.** The workspace is the product. There is no MCP configuration to write. The workspace files are written into each Release folder, not the Knowledge Base root, since a session works in one Release (ADR 0005 as amended), and a `guides/` folder sits beside `work/` (ADR 0010).
 
 Users should be able to start a "help session" by opening Claude Code, Cursor or Codex directly in the Knowledge Base folder. Every assembly therefore writes, at the Knowledge Base root:
 

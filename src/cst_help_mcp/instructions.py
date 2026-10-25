@@ -1,8 +1,8 @@
-"""What a project repository needs to consult the Knowledge Base: the Release folder and an AGENTS.md
-section that says how to add it to a session and how to navigate it (ADR 0014).
+"""How agents find their way around a Release folder: the AGENTS.md that assembly writes into it, and
+the AGENTS.md section that a project repository adds to consult it from outside (ADR 0013, ADR 0014).
 
-The rules and recipes are those of the hand-written AGENTS.md that answered the benchmark from
-the folder alone (`.scratch/cst-help-kb/files-only-experiment.md`).
+Both are built from the same rules and recipes, those of the hand-written AGENTS.md that answered
+the benchmark from the folder alone (`.scratch/cst-help-kb/files-only-experiment.md`).
 """
 
 from __future__ import annotations
@@ -25,6 +25,14 @@ class ReleaseFolder:
     failed: int  # Documents that failed to build
     pages: Counter[str]  # Documents by top-level folder
 
+    @classmethod
+    def of(cls, manifest: layout.BuildManifest, path: Path) -> ReleaseFolder:
+        """The view at ``path`` of the Build that ``manifest`` describes."""
+        pages = Counter(
+            locator.partition("/")[0] if "/" in locator else "." for locator in manifest.documents
+        )
+        return cls(manifest.collection, manifest.release, path, manifest.failed, pages)
+
 
 def release_folders(kb_path: Path, release: str | None = None) -> list[ReleaseFolder]:
     """The folders of one Release, the newest by default."""
@@ -32,14 +40,7 @@ def release_folders(kb_path: Path, release: str | None = None) -> list[ReleaseFo
     folders = []
     for collection, build in layout.assembly_builds(assembly).items():
         manifest = layout.BuildManifest.read(layout.build_dir(kb_path, collection, build))
-        pages = Counter(
-            locator.partition("/")[0] if "/" in locator else "." for locator in manifest.documents
-        )
-        folders.append(
-            ReleaseFolder(
-                collection, manifest.release, (kb_path / collection).resolve(), manifest.failed, pages
-            )
-        )
+        folders.append(ReleaseFolder.of(manifest, (kb_path / collection).resolve()))
     releases = sorted({f.release for f in folders})
     if not releases:
         raise KnowledgeBaseError(f"The Knowledge Base at {kb_path} holds no Release")
@@ -52,43 +53,63 @@ def release_folders(kb_path: Path, release: str | None = None) -> list[ReleaseFo
     return [f for f in folders if f.release == release]
 
 
-RULES = """\
-- **Grep finds pages; it never answers.** Before you answer, open every page you cite with your
-  read tool, even when the grep lines already seem to hold the answer. A snippet leaves out the
-  conditions, figures and exceptions around it. Pages are short; most are under 10 KB.
-- Cite the file path and the Release of every page you rely on.
-- If an identifier is in no page under `vba_3d/`, say it is not documented in this Release. Never
-  invent a method, its arguments or its behaviour.
-- Some answers are only in a figure. Open the image file with your read tool; equation images are
-  not transcribed, so look rather than guess."""
+# What each top-level folder holds, for the table of folders.
+FOLDERS = {
+    "3d": "3D simulation: solver dialogs, overviews, theory, post-processing, modelling",
+    "vba_3d": "VBA object reference: one page per object, one `###` heading per member",
+    "vba": "Overview of the VBA macro language",
+    "general": "Product overview and general features",
+    "userinterface": "The main window and its dialogs",
+    "ribbons": "The ribbon pages",
+    "advanced": "Command line, environment variables and other advanced topics",
+    "license": "Licensing",
+    "simulation_acceleration": "Simulation acceleration",
+    ".": "Python menu topics, at the top of the folder",
+}
+
+# What each entry file at the root of a Release folder holds.
+ENTRY_FILES = {
+    layout.ENTRY_FILES["toc"][0]: "CST's table of contents, as nested links",
+    layout.ENTRY_FILES["keywords"][0]: (
+        "CST's author keyword index: the authors' own terms, each linking to the pages it means"
+    ),
+    layout.API_ENTRY_FILE: (
+        "every API Entry on one line: qualified name, Area, signature, path with anchor; grep it, "
+        "it is too long to read whole"
+    ),
+}
 
 ANATOMY = """\
-- `toc.md` is CST's table of contents as nested links; `keywords.md` is CST's author keyword
-  index, the authors' own terms, each linking to the pages it means. `assets/` holds the images.
 - Every page has frontmatter: `title`, `area`, `source`, and when CST gave them, `keywords` and
-  `toc_paths`. Links between pages are relative to the Release folder.
+  `toc_paths`. Links between pages are relative to the Release folder; `assets/` holds the images.
 - Dialog pages: the `## ` line right under the title is the Ribbon Path, where the dialog is
   reached in the CST ribbon. Dialog fields are bold lines with a `: ` definition under them.
 - VBA pages under `vba_3d/`: one page per object, `## General Methods` and similar groups, then
   `### MethodName` with a ```vba signature block and the description.
+  `special_vba<topic>/..._object.htm.md` is one VBA object (for example
+  `special_vbasolver/special_vbasolver_solver_object.htm.md` is the `Solver` object), and
+  `common_vbaapp/` holds the application-level objects.
 - Folder names in `3d/` say what a page is: `special_solvopt_*` solver and setup dialogs,
   `special_overview_*` overviews, `special_theory_*` theory, `special_postpr_*` post-processing,
   `special_process_*` parameter sweeps and optimisation, `common_*` shared across products."""
 
 RECIPES = """\
-**An identifier** (`Solver.FrequencyRange`, a bare `FrequencyRange`, an object name): grep the
-member as a heading, case-insensitively, in `vba_3d/`: `^### FrequencyRange`. For an object, grep
-its title: `^title: "Solver Object`. Then read the page or the heading's section.
+**An identifier** (`Solver.FrequencyRange`, a bare `FrequencyRange`, an object name): grep
+`api.md` for it, which gives the signature and the page with its anchor; grep a bare member with
+its dot and a trailing space, `.FrequencyRange `, to see every object that has it. Or grep the
+member as a heading, case-insensitively, in `vba_3d/`: `^### FrequencyRange`. For an object,
+grep its title: `^title: "Solver Object`. Then read the page or the heading's section.
 
 **A concept or how-to question**: work from the vendor's own vocabulary outward.
-1. Grep `keywords.md` for your main noun, case-insensitively.
+1. Grep `keywords.md` for your main noun, case-insensitively. The index terms are the authors'
+   synonyms; "Transient Solver Parameters" points at the time domain solver dialog.
 2. Grep `toc.md` the same way to see the neighbourhood of pages.
 3. Grep titles: `^title:.*discrete port` across `3d/`.
 4. Only then grep bodies, with the two or three most specific words, listing files only (no
-   context lines); then read the best match.
-Prefer pages whose title or Ribbon Path matches over pages that merely mention the words. The
-defining page is usually the dialog (`special_solvopt_*`) for settings, the overview
-(`special_overview_*`) for concepts.
+   context lines), and narrow by a second word.
+Prefer pages whose title or Ribbon Path matches over pages that merely mention the words. Read the
+one or two most likely pages. The defining page is usually the dialog (`special_solvopt_*`) for
+settings, the overview (`special_overview_*`) for concepts.
 
 **Where a setting lives in the UI**: the Ribbon Path line of the dialog page.
 
@@ -104,15 +125,71 @@ radiation patterns, "monitor" for a field recording, "port" for excitation; the 
 object is the time domain solver, `FDSolver` the frequency domain solver."""
 
 
+def rules(folders: list[ReleaseFolder]) -> str:
+    """The rules, first among them that grep finds pages and never answers."""
+    release = folders[0].release
+    if any("library" in f.pages for f in folders):
+        documented = f"""\
+- If an identifier is in no page under `vba_3d/` and nowhere in `library/`, say it is not
+  documented in Release {release}. Never invent a method, its arguments or its behaviour.
+- A member that code in `library/` uses but no page documents is an Undocumented Member: use it
+  only knowingly, and say that it is one."""
+    else:
+        documented = f"""\
+- If an identifier is in no page under `vba_3d/`, say it is not documented in Release {release}.
+  Never invent a method, its arguments or its behaviour. This folder holds no Library, so there
+  is no Undocumented Member (one that Library code uses but no page documents) to find."""
+    return f"""\
+- **Grep finds pages; it never answers.** Before you answer, open every page you cite with your
+  read tool, even when the grep lines already seem to hold the answer. A snippet leaves out the
+  conditions, figures and exceptions around it. Pages are short; most are under 10 KB. Grep
+  bodies with no context lines.
+- Cite the file path and the Release of every page you rely on.
+{documented}
+- Some answers are only in a figure. Open the image file with your read tool; equation images are
+  not transcribed, so look rather than guess."""
+
+
+def agents_md(folder: ReleaseFolder) -> str:
+    """The AGENTS.md at the root of a Release folder, which a session opened there reads first."""
+    release = folder.release
+    return f"""\
+# CST Studio Suite {release} help, as files
+
+This folder is the CST Studio Suite help of Release {release}, converted to Markdown:
+{folder.pages.total():,} pages. Every page is the vendor's text; nothing but the Guides was written
+by a model. Use your own file tools: grep, glob, read. There is no search server. Paths are
+relative to this folder. Write what you make, such as macros and notes, into `{layout.WORK_DIR}/`.
+
+{_incompleteness([folder])}## Rules
+
+{rules([folder])}
+
+## What is where
+
+{_folder_table([folder])}
+
+{_entry_files(folder)}
+
+## Page anatomy
+
+{ANATOMY}
+
+## Recipes
+
+{RECIPES}
+
+## Guides
+
+{_guides(folder)}
+"""
+
+
 def agents_section(folders: list[ReleaseFolder]) -> str:
     """The AGENTS.md section for a project repository that consults one Release."""
     release = folders[0].release
     paths = ", ".join(f"`{f.path}`" for f in folders)
     first = folders[0].path
-    pages = Counter[str]()
-    for f in folders:
-        pages.update(f.pages)
-    table = "\n".join(f"| `{name}/` | {count:,} |" for name, count in sorted(pages.items()) if name != ".")
     return f"""\
 The CST Studio Suite help of Release {release} is a folder of Markdown files: {paths}. Every page
 is the vendor's text. Consult it with your own file tools (grep, glob, read); there is no server.
@@ -125,13 +202,13 @@ Add the folder to the session before you need it:
 
 {_incompleteness(folders)}### Rules
 
-{RULES}
+{rules(folders)}
 
 ### What is where
 
-| Folder | Pages |
-|---|---:|
-{table}
+{_folder_table(folders)}
+
+{_entry_files(folders[0])}
 
 {ANATOMY}
 
@@ -139,6 +216,33 @@ Add the folder to the session before you need it:
 
 {RECIPES}
 """
+
+
+def _folder_table(folders: list[ReleaseFolder]) -> str:
+    pages = Counter[str]()
+    for f in folders:
+        pages.update(f.pages)
+    rows = [
+        f"| {'`' + name + '/`' if name != '.' else '(top level)'} | {count:,} | {FOLDERS.get(name, '')} |"
+        for name, count in sorted(pages.items(), key=lambda item: (item[0] == ".", item[0]))
+    ]
+    return "\n".join(["| Folder | Pages | Content |", "|---|---:|---|", *rows])
+
+
+def _entry_files(folder: ReleaseFolder) -> str:
+    present = [f"- `{name}`: {what}" for name, what in ENTRY_FILES.items() if (folder.path / name).is_file()]
+    return "Entry files at the root of the folder:\n" + "\n".join(present)
+
+
+def _guides(folder: ReleaseFolder) -> str:
+    guides = sorted((folder.path / layout.GUIDES_DIR).glob("*.md"))
+    if not guides:
+        return f"`{layout.GUIDES_DIR}/` holds Guides that agent sessions write. There are no Guides yet."
+    listed = "\n".join(f"- `{layout.GUIDES_DIR}/{guide.name}`" for guide in guides)
+    return (
+        "Guides are generated by agent sessions, not the vendor's text: check every claim against the "
+        f"pages a Guide cites before you rely on it.\n\n{listed}"
+    )
 
 
 def _incompleteness(folders: list[ReleaseFolder]) -> str:

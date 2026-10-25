@@ -7,6 +7,7 @@ import json
 import re
 from dataclasses import dataclass, replace
 
+from cst_help_mcp.layout import ApiLine
 from cst_help_mcp.model import (
     Block,
     Document,
@@ -104,6 +105,31 @@ def render_navigation(release: str, title: str, nodes: list[NavNode]) -> str:
 
     add(nodes, 0)
     return "\n".join(lines) + "\n"
+
+
+def render_api(release: str, entries: list[ApiLine]) -> str:
+    """The entry file api.md: one API Entry per line, with its Area, signature and Locator, for grep."""
+    lines = [
+        *_frontmatter({"release": release, "title": "API Entries"}),
+        "# API Entries",
+        "",
+        "| Qualified name | Area | Signature | Locator |",
+        "|---|---|---|---|",
+    ]
+    for entry in sorted(entries, key=lambda e: (e.qualified_name.lower(), e.area, e.locator)):
+        signature = " ".join(entry.signature.split())
+        # The Locator is code, not a link, so that a grep line stays short.
+        locator = f"{entry.locator}#{entry.anchor}"
+        cells = [entry.qualified_name, entry.area, _code(signature), _code(locator)]
+        lines.append("| " + " | ".join(c.replace("|", "\\|") for c in cells) + " |")
+    return "\n".join(lines) + "\n"
+
+
+def _code(text: str) -> str:
+    """Inline code that may itself hold backticks."""
+    fence = "`" * (max((len(run) for run in re.findall(r"`+", text)), default=0) + 1)
+    padding = " " if text.startswith("`") or text.endswith("`") else ""
+    return f"{fence}{padding}{text}{padding}{fence}"
 
 
 def _frontmatter(front: dict[str, object]) -> list[str]:

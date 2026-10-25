@@ -1,7 +1,9 @@
 """Assembly: make the newest Build of every Collection the readable view, then switch the pointer.
 
 Each Collection's view is its Build's tree, linked file by file, with the entry files rendered
-from the Build's navigation data. Nothing but files for reading goes into a view (ADR 0014).
+from the Build's navigation data and API Entries. Nothing but files for reading goes into a view
+(ADR 0014), and the workspace around them: AGENTS.md, CLAUDE.md, and the folders that agents
+write into, carried over from the previous view (ADR 0013).
 """
 
 from __future__ import annotations
@@ -14,7 +16,8 @@ from pathlib import Path
 
 from cst_help_mcp import layout
 from cst_help_mcp.errors import KnowledgeBaseError
-from cst_help_mcp.render import render_navigation
+from cst_help_mcp.instructions import ReleaseFolder, agents_md
+from cst_help_mcp.render import render_api, render_navigation
 
 
 @dataclass(frozen=True)
@@ -42,34 +45,68 @@ def assemble(kb_path: Path) -> Assembly:
 
 def _update_view(kb_path: Path, collection: str, build: Path) -> None:
     """Replace the readable view with hard links into the Build's tree, or copies where links fail,
-    and the entry files."""
+    and the entry files. What agents wrote into the workspace folders moves over to the new view."""
+    target = kb_path / collection
     for leftover in kb_path.glob(f".{collection}.view-*"):
+        # An assembly that stopped between its renames left the workspace folders here.
+        _move_workspace(leftover, target)
+        if any((leftover / name).exists() for name in layout.WORKSPACE_DIRS):
+            continue  # the view has its own; keep these rather than lose what agents wrote
         layout.remove_tree(leftover)
     staging = kb_path / f".{collection}.view-{os.getpid()}"
     shutil.copytree(build / layout.TREE, staging, copy_function=_link_or_copy)
     _write_entry_files(staging, build)
-    target = kb_path / collection
+    retired = None
     if target.exists():
         retired = target.with_name(f".{target.name}.view-retired-{os.getpid()}")
         try:
             target.rename(retired)
+            _move_workspace(retired, staging)
         except OSError as e:
+            if retired.exists():
+                _move_workspace(staging, retired)
+                retired.rename(target)
             layout.remove_tree(staging)
             raise KnowledgeBaseError(
                 f"Cannot replace {target}, perhaps because a file in it is open: {e}. "
                 "Close it and run cst-help assemble."
             ) from None
-        layout.remove_tree(retired)
+    for name in layout.WORKSPACE_DIRS:
+        (staging / name).mkdir(exist_ok=True)
+    _write_workspace_files(staging, build)
     staging.rename(target)
+    if retired is not None:
+        layout.remove_tree(retired)
+
+
+def _move_workspace(old: Path, new: Path) -> None:
+    """Move the workspace folders from an old view to a new one that lacks them."""
+    for name in layout.WORKSPACE_DIRS:
+        if (old / name).is_dir() and not (new / name).exists():
+            new.mkdir(exist_ok=True)
+            (old / name).rename(new / name)
 
 
 def _write_entry_files(view: Path, build: Path) -> None:
-    """Write ``toc.md`` and ``keywords.md`` from the navigation trees the Build found."""
+    """Write ``toc.md`` and ``keywords.md`` from the navigation trees the Build found, and ``api.md``
+    from its API Entries."""
     release = layout.BuildManifest.read(build).release
     for tree, nodes in layout.read_navigation(build).items():
         name, title = layout.ENTRY_FILES[tree]
-        text = render_navigation(release, title, nodes)
-        (view / name).write_text(text, encoding="utf-8", newline="\n")
+        _write(view / name, render_navigation(release, title, nodes))
+    _write(view / layout.API_ENTRY_FILE, render_api(release, layout.read_api_entries(build)))
+
+
+def _write_workspace_files(view: Path, build: Path) -> None:
+    """Write ``AGENTS.md``, which lists the view's entry files and Guides, and ``CLAUDE.md``, which
+    imports it."""
+    folder = ReleaseFolder.of(layout.BuildManifest.read(build), view)
+    _write(view / layout.AGENTS_FILE, agents_md(folder))
+    _write(view / layout.CLAUDE_FILE, f"@{layout.AGENTS_FILE}\n")
+
+
+def _write(path: Path, text: str) -> None:
+    path.write_text(text, encoding="utf-8", newline="\n")
 
 
 def _link_or_copy(src: str, dst: str) -> None:

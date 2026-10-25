@@ -184,6 +184,14 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
         layout.write_json(staging / layout.ASSETS_FILE, [asdict(asset) for asset in assets])
         _write_tree(staging / layout.TREE, docs)
         _write_navigation(staging, navigation)
+        layout.write_api_entries(
+            staging,
+            [
+                layout.ApiLine(e.qualified_name, doc.area, e.signature, doc.locator, e.anchor)
+                for doc in docs
+                for e in doc.api_entries
+            ],
+        )
         layout.write_json(staging / layout.REPORT_FILE, report.to_dict())
         manifest = layout.BuildManifest(
             collection=collection.name,

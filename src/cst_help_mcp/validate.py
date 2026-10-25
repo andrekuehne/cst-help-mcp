@@ -116,6 +116,8 @@ def _check_links(kb_path: Path, view: Path) -> list[str]:
     """
     problems = []
     for page in sorted(view.rglob("*.md")):
+        if page.relative_to(view).parts[0] == layout.WORK_DIR:
+            continue  # what agents write there is theirs, not the Knowledge Base's
         text = _FENCED.sub("", page.read_text(encoding="utf-8"))
         targets = [a or b for a, b in _MARKDOWN_TARGET.findall(text)]
         targets += [html.unescape(t) for t in _HTML_TARGET.findall(text)]

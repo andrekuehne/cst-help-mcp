@@ -1,10 +1,11 @@
 """Where a Knowledge Base keeps its Builds, assemblies and the active pointer (ADR 0009).
 
     <kb>/builds/<collection>/<build id>/   one immutable Build: build.json, report.json, navigation.json,
-                                           assets.json, tree/
+                                           api.json, assets.json, tree/
     <kb>/assemblies/<assembly id>/         one assembly: assembly.json, naming the Build of each Collection
     <kb>/active.json                       the pointer to the active assembly, replaced atomically
-    <kb>/<collection>/                     the readable view: the active Build's tree and the entry files
+    <kb>/<collection>/                     the readable view: the active Build's tree, the entry files
+                                           and the workspace files and folders
 
 Builds and assemblies are written under a dot-prefixed name and renamed into place once
 finished, so a folder under its final name is always whole. A Build's files are then made
@@ -46,6 +47,17 @@ ENTRY_FILES: dict[NavTree, tuple[str, str]] = {
     "toc": ("toc.md", "Table of contents"),
     "keywords": ("keywords.md", "Keywords"),
 }
+# The API Entries a Build found, beside its tree, and the entry file assembly lists them in.
+API_FILE = "api.json"
+API_ENTRY_FILE = "api.md"
+# The workspace files that assembly writes at the root of a readable view (ADR 0013).
+AGENTS_FILE = "AGENTS.md"
+CLAUDE_FILE = "CLAUDE.md"
+# The folders of a readable view that agents write into and that Guides go into; assembly
+# carries them over from view to view and never writes into them.
+WORK_DIR = "work"
+GUIDES_DIR = "guides"
+WORKSPACE_DIRS = (WORK_DIR, GUIDES_DIR)
 # The folder of a Build's tree that holds its Assets, and the list of them beside the tree.
 ASSETS_DIR = "assets"
 ASSETS_FILE = "assets.json"
@@ -219,6 +231,27 @@ def read_navigation(build: Path) -> dict[NavTree, list[NavNode]]:
     nav_file = build / NAVIGATION_FILE
     trees: dict[NavTree, list[Any]] = read_json(nav_file) if nav_file.is_file() else {}
     return {tree: [NavNode.from_dict(n) for n in nodes] for tree, nodes in trees.items()}
+
+
+@dataclass(frozen=True)
+class ApiLine:
+    """One API Entry as api.md lists it: where it is documented, not what it says."""
+
+    qualified_name: str
+    area: str
+    signature: str
+    locator: str  # the Document's, without the anchor
+    anchor: str
+
+
+def write_api_entries(build: Path, entries: list[ApiLine]) -> None:
+    write_json(build / API_FILE, [asdict(entry) for entry in entries])
+
+
+def read_api_entries(build: Path) -> list[ApiLine]:
+    """The API Entries a Build found; none for a Build without them."""
+    api_file = build / API_FILE
+    return [ApiLine(**entry) for entry in read_json(api_file)] if api_file.is_file() else []
 
 
 def assembly_builds(assembly: Path) -> dict[str, str]:

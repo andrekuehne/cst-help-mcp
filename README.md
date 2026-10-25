@@ -12,16 +12,20 @@ of it; every user builds from their own installation, and the built folder stays
 ```
 <kb>/
   cst-2024/                 one folder per Release: open this one
+    AGENTS.md               what is where and how to find it with grep; CLAUDE.md imports it
     toc.md                  CST's table of contents, as nested links
     keywords.md             CST's author keyword index, each term linking to its pages
+    api.md                  every API Entry on one line: name, Area, signature, path with anchor
     3d/ vba_3d/ general/ …  one Markdown page per help topic, with frontmatter (title, Area, source,
                             table-of-contents paths, keywords); the file path is the page's Locator
     assets/                 the images the pages show, as PNG or JPEG
+    work/ guides/           for what agents write; builds and assemblies carry them over untouched
   builds/ assemblies/       immutable Builds and their manifests, reports and navigation data
   active.json               the pointer to the active assembly
 ```
 
 Only what agents read goes into a Release folder, so a grep there returns pages and nothing else.
+Every assembly regenerates `AGENTS.md`, `CLAUDE.md` and the index files, so don't edit them.
 Each Build's report (`builds/<collection>/<build>/report.json`) lists what could not be converted.
 
 ## Building
