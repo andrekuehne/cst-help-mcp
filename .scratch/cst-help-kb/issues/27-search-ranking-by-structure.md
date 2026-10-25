@@ -1,10 +1,10 @@
 # 27: Search ranking by structure
 
-**What to build:** Search ranks by structure instead of by fitted field weights, as `../search-ranking-proposal.md` lays out. After the API Entry tier, candidates are ordered by how many distinct query words they match, then by today's BM25 sum within each level; a Document appears at most twice among the hits, with its best Sections. Each hit says which query words it matched, and the hits are followed by a one-line list of further matching Documents within the search budget. The benchmark runner scores hit@10 by Document, diagnoses every miss, gains a derived set of link labels, and the query log records reads. The field weights stay the spec's order (title, keywords, paths, headings, body) and are not tuned.
+**What to build:** Search ranks by structure instead of by fitted field weights, as the search ranking proposal laid out (deleted with ADR 0014; in git history). After the API Entry tier, candidates are ordered by how many distinct query words they match, then by today's BM25 sum within each level; a Document appears at most twice among the hits, with its best Sections. Each hit says which query words it matched, and the hits are followed by a one-line list of further matching Documents within the search budget. The benchmark runner scores hit@10 by Document, diagnoses every miss, gains a derived set of link labels, and the query log records reads. The field weights stay the spec's order (title, keywords, paths, headings, body) and are not tuned.
 
 **Blocked by:** 06, 07
 
-**Status:** ready-for-agent
+**Status:** wontfix
 
 - [ ] Candidates from the word indexes are ordered by the number of distinct query words they match (in the Section's title, headings and body, or in its Document's keywords and table-of-contents paths), then by the BM25 sum. The API Entry tier and the partial-name tier keep their places. Coverage comes from FTS5 postings per query word, not from reading candidate text; a long question still ranks in about 30 ms on the development `.kb`.
 - [ ] At most two Sections of one Document appear among the hits, the best-ranked ones. The CLI and the server instructions say that the rest of a Document is one `cst_help_read` away.
@@ -29,3 +29,5 @@ All 102 scored probes of 18 questions (full text and short queries, unfiltered a
 ## Comments
 
 **2026-10-25, from the proposal.** The misses the benchmark shows today are not vocabulary gaps: in nearly every probe every content word of the query occurs in the expected Document, and the Document sits among BM25's candidates at rank 12 to 195. What outranks it is sibling Sections of one Document, shorter pages that say the same words in less text, and Sections that match one heavy field (the title, copied into every Section) rather than all the words. Coverage first and two Sections per Document address the first and third; ticket 28 addresses the second. A phrase or `NEAR` tier for CST's two-word terms ("time domain", "waveguide port") is a candidate follow-up, untested; if it is tried, it goes between the all-words level and the rest, with no weight.
+
+**2026-10-25, retired.** The ranker it would have improved is removed. Agents reading file paths do not have its miss shapes: the SOL-01 page the ranker put at rank 28 was found with one title grep in both runs. See ADR 0014 and `../files-only-experiment.md`.

@@ -1,25 +1,25 @@
 # CST Help Knowledge Base
 
-Tooling that turns a user's own licensed CST Studio Suite documentation into a Knowledge Base that agents consult, either through an MCP server or by reading its files directly, so that generated macros, scripts and how-to answers are grounded in the documentation.
+Tooling that turns a user's own licensed CST Studio Suite documentation into a Knowledge Base folder that agents read with their own file tools, so that generated macros, scripts and how-to answers are grounded in the documentation.
 
 ## Language
 
 ### Building and holding documentation
 
 **Knowledge Base**:
-The self-contained, relocatable result of a build: readable documents, their images and originals, and everything needed to search them. Built from one user's licensed documentation; never distributed with the tool.
+The self-contained, relocatable result of a build: readable documents, their images and originals, the copied Library code and PDFs, and the index files agents navigate by. Built from one user's licensed documentation; never distributed with the tool.
 _Avoid_: KB bundle, output, corpus, index
 
 **Release**:
-One version of CST Studio Suite, such as 2024. A server serves exactly one Release, together with every release-independent Collection.
+One version of CST Studio Suite, such as 2024. Each Release is its own folder, and a session works in one Release together with the release-independent Collections.
 _Avoid_: version, year
 
 **Collection**:
-A named unit of documentation that is built, replaced or removed as a whole. A Collection either belongs to one Release (everything shipped with that installation) or is release-independent, like separately gathered example PDFs, and is then served alongside every Release.
+A named unit of documentation that is built, replaced or removed as a whole. A Collection either belongs to one Release (everything shipped with that installation) or is release-independent, like separately gathered example PDFs, and then sits as a sibling folder beside every Release.
 _Avoid_: corpus, module
 
 **Area**:
-A part of a Collection that comes from one help project or document family, such as VBA 3D, WinWrap Basic, Python, Example Projects, Manuals, Macros or Materials. Searches can be narrowed to one or more Areas.
+A part of a Collection that comes from one help project or document family, such as VBA 3D, WinWrap Basic, Python, Example Projects, Manuals, Macros or Materials. An Area is a folder, so a grep can be confined to one.
 _Avoid_: module, category, project
 
 **Build**:
@@ -27,7 +27,7 @@ One immutable result of building a single Collection from its Sources. A Knowled
 _Avoid_: version, snapshot, run
 
 **Assembly**:
-One immutable combination of one Build per Collection, together with the search index and entry files that come from them. A Knowledge Base serves one active Assembly at a time.
+One immutable combination of one Build per Collection, together with the entry files and `AGENTS.md` that come from them. A Knowledge Base has one active Assembly at a time.
 _Avoid_: deployment, snapshot, index
 
 **Source**:
@@ -43,7 +43,7 @@ Another source path under which the same Document was published identically; a l
 _Avoid_: duplicate, copy
 
 **Section**:
-An addressable part of a Document, and the unit that search returns. In code, a procedure or the file header.
+An addressable part of a Document, reached by its anchor.
 _Avoid_: chunk, passage
 
 **Ribbon Path**:
@@ -58,12 +58,8 @@ _Avoid_: attachment, resource
 One documented VBA object, method or property, or Python class, function or method, addressable by its Area and qualified name. The same qualified name can exist in several Areas, as with the VBA `Solver` object.
 _Avoid_: symbol, command, keyword
 
-**Synonym Set**:
-A group of CST terms that mean the same thing, such as "time domain", "transient", "T-solver" and the VBA `Solver` object. Written for this tool rather than taken from the vendor, and used to widen searches.
-_Avoid_: thesaurus, alias (an Alias is a duplicate Document path)
-
 **Locator**:
-The single address of a Document or Section, valid both as a path into the Knowledge Base's files and as an argument to the MCP tools.
+The single address of a Document or Section, a path into the Knowledge Base's files, with an anchor for a Section.
 _Avoid_: ID, reference, URL
 
 ### CST's example code
@@ -89,7 +85,7 @@ A VBA file of shared helper procedures that Macros and Result Templates pull in 
 _Avoid_: lib, library file
 
 **Helper**:
-A public procedure or variable defined in an Include, addressable by name. Library code relies on Helpers, but they are not part of the documented CST API and never count as API Entries.
+A public procedure or variable defined in an Include, addressable by name. Library code relies on Helpers, but they are not part of the documented CST API and never count as API Entries; `AGENTS.md` says so.
 _Avoid_: lib function, utility, API
 
 **Material Definition**:
@@ -114,16 +110,12 @@ _Avoid_: duplicate, copy
 
 ### Derived from the documentation
 
-**Usage**:
-A Library Section that uses an API Entry or an Undocumented Member, found by the build when it reads the code. Shown to agents as an example, labelled as found heuristically.
-_Avoid_: example (an everyday word only, never a term; see Example Project), reference
-
 **Undocumented Member**:
-A VBA object member that Library code uses but no help page documents. Reported with its Usages instead of as "not found".
+A VBA object member that Library code uses but no help page documents. An agent that finds one by grep reports it as such instead of as "not documented".
 _Avoid_: hidden API, internal API
 
 **Guide**:
-A generated Document that summarises patterns, idioms and pitfalls across many Documents and Usages, always marked as generated and citing the Locators it draws on.
+A generated Markdown file in the workspace that summarises patterns, idioms and pitfalls across many Documents and Library files, always marked as generated and citing the Locators it draws on.
 _Avoid_: infosheet, summary, cheat sheet
 
 ### Around the Knowledge Base

@@ -8,13 +8,14 @@ Every expected source was found by hand in `.ingestion/2024/`. Each path, anchor
 
 ## Scoring
 
-`docs/benchmark.toml` holds these questions in the form `cst-help benchmark` scores, with short queries and a tuning/held-out split. This file keeps the reasoning; change a question's sources, Area or text in both.
+`docs/benchmark.toml` holds these questions in the form the agent run uses. This file keeps the reasoning; change a question's sources, Area or text in both.
 
-- Run each question through `cst_help_search`, once without a filter and once with the listed Area filter, if there is one.
-- **Hit at 5:** at least one expected source is among the top 5 Sections returned. A Section counts when it belongs to the expected Document, or to an Alias of it. For a PDF, the Section's page range must include the given page.
-- **Rank:** record the rank (1 to 5) of the best-ranked expected source, or "miss". Report the hit-at-5 rate and the mean reciprocal rank, per category and overall.
-- **Section hit (stricter, optional):** when an anchor is given, the returned Section must be the one that holds that anchor.
-- **API questions:** also check that `cst_help_lookup` with the listed API Entry resolves to the first expected source.
+The benchmark is run by agents, not by a ranker (ADR 0014). For each question, an agent with file tools only (grep, glob, read) is opened in the Knowledge Base folder, reads `AGENTS.md`, and answers the question. Its tool calls are logged.
+
+- **Hit:** the agent read an expected Document of the question. An Alias of it counts. For a PDF, the page it read must include the given page.
+- **Calls:** the number of tool calls up to and including the first read of an expected Document, counting the `AGENTS.md` read as call 1. Report the distribution and the median.
+- **Thresholds:** every scorable question is a hit, and the median is at most 4 calls. Set from the two runs of 2026-10-25 (`.scratch/cst-help-kb/files-only-experiment.md`), which both met them.
+- **API questions:** also check that the listed API Entry has a line in `api.md` pointing at the first expected source.
 
 ## How to read and edit
 

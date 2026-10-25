@@ -9,4 +9,4 @@
 - [ ] `$...$`, `$$...$$`, `\(...\)`, `\[...\]` and `\begin{...}` environments are recognised on MathJax pages only.
 - [ ] HTML entities inside TeX are decoded.
 - [ ] Mis-paired `$` delimiters are reported in the build report rather than corrupting the surrounding text.
-- [ ] The formulas on the THEO-01 and THEO-02 pages render, and their TeX is searchable as written.
+- [ ] The formulas on the THEO-01 and THEO-02 pages render, and their TeX is in the Markdown as written.

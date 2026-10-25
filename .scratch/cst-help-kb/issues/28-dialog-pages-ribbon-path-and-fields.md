@@ -4,7 +4,7 @@
 
 **Blocked by:** 04, 05
 
-**Status:** ready-for-agent
+**Status:** wontfix
 
 - [ ] `Document.ribbon_paths` holds each Ribbon Path of a topic, as written, with its popup link reduced to its label. The frontmatter and the Markdown show it as a field under the title ("Ribbon: Simulation: Solver > Setup Solver"), not as a heading. Pages without one are unchanged.
 - [ ] Ribbon Paths are indexed in `documents_fts`, in the `toc_paths` column or one of their own at the same weight. A dialog page whose table of contents gives no path, and which has no breadcrumbs, gets its Ribbon Path as the path shown in hits and frontmatter (spec story 32 extended).
@@ -17,3 +17,5 @@
 ## Comments
 
 **2026-10-25, from the proposal.** On the development `.kb`, 649 of 1,087 3D Documents are one empty title Section plus one content Section whose heading is the Ribbon Path; 935 of 1,042 3D Documents have field definitions; 1,366 Sections have an empty body. The Time Domain Solver Parameters page is 12 KB in one Section with `toc_paths` and `breadcrumbs` both empty, so for "time domain solver accuracy" it ranks 28th behind shorter pages that repeat the same words. As a heading, the Ribbon Path also makes "simulation", "solver" and "setup" heavy and useless on every dialog page. `docs/research/cst-2024-corpus.md` describes the line (an `h2` with an icon, a popup link "Modeling:" and "Shapes > Brick").
+
+**2026-10-25, retired.** A reader change made for the ranker. The Ribbon Path rendered as a heading reads fine to an agent, and the fields are already definition items. Navigation-only Sections are harmless without a ranker. See ADR 0014 and `../files-only-experiment.md`.

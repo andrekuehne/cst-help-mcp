@@ -1,5 +1,7 @@
 # The Knowledge Base is also a ready-to-open agent workspace
 
+**Confirmed by ADR 0014.** The workspace is the product. There is no MCP configuration to write.
+
 Users should be able to start a "help session" by opening Claude Code, Cursor or Codex directly in the Knowledge Base folder. Every assembly therefore writes, at the Knowledge Base root:
 
 - a generated `AGENTS.md` of about 8 KB at most, holding the routing rules, the citation and "not documented" rules, and a compact index of each Area's entry files and every Guide;

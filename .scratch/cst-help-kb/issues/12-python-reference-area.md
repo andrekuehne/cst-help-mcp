@@ -10,4 +10,4 @@
 - [ ] Every inventory object becomes an API Entry with its signature and parameters, taken from its entry on the page.
 - [ ] Links from Sphinx pages into the RoboHelp help resolve to Locators.
 - [ ] The RoboHelp topics about Python (`mergedProjects/Python/python_overview.htm`, and the root `menu.htm` and `user_scipts.htm`, which ticket 04 reads into `general`) move to Area `python`. Their links into the Sphinx pages resolve.
-- [ ] API-08 and API-09 resolve through lookup and search.
+- [ ] API-08 and API-09 reach their pages in the agent run, and their entries are in `api.md`.

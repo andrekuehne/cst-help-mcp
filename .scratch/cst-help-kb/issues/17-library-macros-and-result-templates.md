@@ -1,17 +1,17 @@
-# 17: Library: Macros and Result Templates
+# 17: Library as files
 
-**What to build:** The `cst-release` Source reads the Library's Macros and Result Templates into Areas `macros` and `result-templates`. A user can say "build it like the Farfield Result template", and lookup by Display Name returns a ranked shortlist headed by the right file.
+**What to build:** The `cst-release` Source copies the Library's Macros, Result Templates and Includes into the tree under `library/`, with their original names and folder structure, so agents grep working code the way they grep any repository. A generated `library.md` indexes them one line per file. There are no Sections, no Display Name table and no Usage index: grep over `library/` is all of those.
 
-**Blocked by:** 16
+**Blocked by:** 29
 
 **Status:** ready-for-agent
 
-- [ ] Files are classified by content (control macro, structure macro, Result Template, helper script, class module, preset, data, scrambled, binary), with cp1252 and CRLF handled.
-- [ ] Display Names come from the folder path plus the file stem before `^`. The Application Filter is parsed into an attribute, and Variants are linked. MWS Variants rank first.
-- [ ] Each file has a header Section plus one Section per `Sub` or `Function`, anchored by procedure name. Files under about 150 lines stay whole, and the change history becomes metadata.
-- [ ] Each Document's metadata lists its menu path, kind, Application Filter, includes, help page and Aliases. Exact copies become Aliases.
-- [ ] Scrambled Macros appear with metadata only. Legacy templates are flagged and ranked lower. Executables, Office files and wheels are excluded.
-- [ ] `StartHelp` targets resolve to help Locators without regard to case.
-- [ ] Dialog bitmaps become PNG Assets of the Documents that load them.
-- [ ] Code Sections get their own search weights, and search's kind filter separates code from prose.
-- [ ] LIB-01 to LIB-03 find their templates by Display Name and by search.
+- [ ] `library/Macros/`, `library/Result Templates/` and `library/Includes/` hold the text files (`.mcr`, `.mcs`, `.rtp`, `.bas`, `.cls`, `.txt`) as they are, re-encoded from cp1252 to UTF-8, with the original names kept. Executables, Office files, wheels and project files are left out. Scrambled Macros are listed in `library.md` but not copied.
+- [ ] `library.md` has one line per file: kind (control macro, structure macro, Result Template, Include, helper script), menu path and Display Name (folder path plus file stem before `^`), Application Filter, Variants, and the first comment line. An Include's line also names its public procedures.
+- [ ] Dialog bitmaps become PNG Assets next to the Macros that load them, since Read opens PNG and not BMP.
+- [ ] `AGENTS.md` gains the Library recipes: find working code for an API Entry with a grep over `library/`; a `'#include "X"` line points at `library/Includes/X`; a public procedure in an Include is a Helper and not a documented CST API Entry; a member used in `library/` but absent from `vba_3d/` is an Undocumented Member and is reported as such.
+- [ ] LIB-01 to LIB-05 reach their files in the agent run, and `GetLastResult_LIB` is found by grep in its Include.
+
+## Comments
+
+**2026-10-25.** Shrunk for ADR 0014, and absorbs ticket 18. The earlier version parsed each file into Sections with per-procedure anchors, built a Display Name lookup and computed Include dependencies. Copying the files and indexing them one line each gives agents the same reach with grep.

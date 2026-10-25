@@ -8,5 +8,5 @@
 
 - [ ] Every language reference page becomes a Document, with its syntax, group and description as structured blocks.
 - [ ] Code examples whose keywords are hyperlinks render as code without losing their line breaks.
-- [ ] Keywords are API Entries, matched without regard to case.
-- [ ] API-06 and API-07 resolve through lookup and search.
+- [ ] Keywords are API Entries, listed in `api.md` as written.
+- [ ] API-06 and API-07 reach their pages in the agent run.

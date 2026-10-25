@@ -14,4 +14,4 @@ VBA schematic objects become API Entries in their own Area.
 - [ ] VBA schematic API Entries stay distinct from VBA 3D ones with the same name.
 - [ ] The Example Projects are included, although no table of contents reaches them.
 - [ ] All Word manuals and the release notes build, and REL-01 finds its page.
-- [ ] Every benchmark question can be scored, and the full benchmark is re-baselined.
+- [ ] Every benchmark question can be run, and the full agent run is recorded in ticket 16's table.
