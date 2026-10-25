@@ -68,8 +68,8 @@ class Folder:
         folder = cls(path)
         for page in path.rglob("*.md"):
             front = _frontmatter(page)
-            if "source" not in front:
-                continue
+            if "source" not in front or "copy_of" in front:
+                continue  # not a page, or a copy of the Document at its Locator
             locator = page.relative_to(path).as_posix()
             folder.areas.add(front["area"])
             folder.areas.update(front.get("alias_areas", []))

@@ -271,6 +271,9 @@ class Document:
     # The breadcrumb paths embedded in the source, relative to its own project's table of contents.
     breadcrumbs: list[str] = field(default_factory=list)
     unpaired_math: list[UnpairedMath] = field(default_factory=list)
+    # Folders of the tree where its Markdown is also written, so that a grep confined to its Area's
+    # folder finds a Document whose Locator lies outside it.
+    copied_to: list[str] = field(default_factory=list)
     generated: bool = False  # written in an agent session, such as a Guide (ADR 0010)
     heuristic: bool = False  # found by the build's heuristics, such as Usages (ADR 0012)
 

@@ -105,6 +105,18 @@ def test_the_python_menu_topics_at_the_help_root_belong_to_python(python_build: 
         assert '\narea: "python"\n' in _md(python_build, locator)
 
 
+def test_the_python_menu_topics_are_copied_into_python_so_a_grep_there_finds_them(
+    python_build: ProseBuild,
+) -> None:
+    for locator in ("menu.htm.md", "user_scipts.htm.md"):
+        original = _md(python_build, locator)
+        copy = _md(python_build, f"python/{locator}")
+        # The copy says which Locator to cite; otherwise it is the page as written at the top.
+        assert copy == original.replace("\n---\n", f'\ncopy_of: "{locator}"\n---\n', 1)
+    agents = (python_build.tree / "AGENTS.md").read_text(encoding="utf-8")
+    assert "| `python/` | 9 |" in agents  # copies are no Documents of their own
+
+
 def test_figures_sized_in_millimetres_become_assets(python_build: ProseBuild) -> None:
     assert python_build.report["counts"]["missing_assets"] == 0
     assert "![FMCW RADAR Model](assets/" in _md(python_build, "python/source/cst.radar.html.md")

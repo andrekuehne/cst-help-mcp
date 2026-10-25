@@ -72,7 +72,7 @@ FOLDERS = {
         "Python reference (`cst.interface`, `cst.results`, `cst.eda`, `cst.asymptotic`, `cst.radar`, "
         "`cst.units`), one page per package, and its overview"
     ),
-    ".": "Python menu topics (CST Apps, user scripts), at the top of the folder",
+    ".": "Python menu topics (CST Apps, user scripts), at the top of the folder and copied into `python/`",
 }
 
 # What each entry file at the root of a Release folder holds.

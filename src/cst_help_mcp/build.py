@@ -47,6 +47,9 @@ class _Project:
     topics: tuple[str, ...] = ()
     # A Sphinx project: its inventory lists its pages, all topics, and its reader reads them with it.
     sphinx: bool = False
+    # A folder of the tree where its Documents are also written, when their Locators lie outside
+    # their Area's folder.
+    copy_to: str = ""
 
     def files(self, release: Path) -> list[Path]:
         folder = release / self.folder
@@ -91,7 +94,7 @@ _CST_RELEASE_PROJECTS = (
     _Project("python", "Online Help/Python", read_sphinx_page, sphinx=True),
     _Project("python", "Online Help/mergedProjects/Python", _READ_PROSE),
     # The Python menu topics (CST Apps and user scripts) at the root of the help.
-    _Project("python", "Online Help", _READ_PROSE, topics=("menu.htm", "user_scipts.htm")),
+    _Project("python", "Online Help", _READ_PROSE, topics=("menu.htm", "user_scipts.htm"), copy_to="python"),
 )
 
 
@@ -298,6 +301,8 @@ def _read_source(
                 report.failures.append(Failure(rel, f"{type(e).__name__}: {e}"))
                 continue
             report.converted += 1
+            if project.copy_to:
+                doc.copied_to.append(project.copy_to)
             yield doc
     if not found:
         raise BuildError(
@@ -314,13 +319,13 @@ def _selected(rel: str, source: SourceConfig) -> bool:
 
 
 def _check_locators(docs: list[Document]) -> None:
+    """No two Documents share a path in the tree, as a Locator or as a copy's path."""
     seen: dict[str, str] = {}
     for doc in docs:
-        other = seen.setdefault(doc.locator, doc.source_path)
-        if other != doc.source_path:
-            raise BuildError(
-                f"Locator collision: '{other}' and '{doc.source_path}' both map to '{doc.locator}'"
-            )
+        for path in (doc.locator, *_copies(doc)):
+            other = seen.setdefault(path, doc.source_path)
+            if other != doc.source_path:
+                raise BuildError(f"Locator collision: '{other}' and '{doc.source_path}' both map to '{path}'")
 
 
 def _merge_aliases(docs: list[Document]) -> list[Document]:
@@ -354,6 +359,14 @@ def _write_tree(tree: Path, docs: list[Document]) -> None:
         md = tree / doc.locator
         md.parent.mkdir(parents=True, exist_ok=True)
         md.write_text(render_markdown(doc), encoding="utf-8", newline="\n")
+        for path in _copies(doc):
+            (tree / path).parent.mkdir(parents=True, exist_ok=True)
+            (tree / path).write_text(render_markdown(doc, copy=True), encoding="utf-8", newline="\n")
+
+
+def _copies(doc: Document) -> list[str]:
+    """The paths in the tree where a Document's Markdown is copied."""
+    return [f"{folder}/{doc.locator}" for folder in doc.copied_to]
 
 
 def _write_navigation(build: Path, navigation: Navigation) -> None:

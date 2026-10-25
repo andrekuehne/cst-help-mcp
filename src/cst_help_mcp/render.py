@@ -45,11 +45,12 @@ class Part:
     images: tuple[int, ...] = ()
 
 
-def render_markdown(doc: Document) -> str:
-    return "".join(part.text for part in render_parts(doc))
+def render_markdown(doc: Document, copy: bool = False) -> str:
+    """A Document's Markdown; a copy's frontmatter names the Locator to cite, the Document's own."""
+    return "".join(part.text for part in render_parts(doc, copy))
 
 
-def render_parts(doc: Document) -> list[Part]:
+def render_parts(doc: Document, copy: bool = False) -> list[Part]:
     front: dict[str, object] = {
         "release": doc.release,
         "area": doc.area,
@@ -67,6 +68,8 @@ def render_parts(doc: Document) -> list[Part]:
         front["aliases"] = doc.aliases
     if doc.alias_areas:
         front["alias_areas"] = doc.alias_areas
+    if copy:
+        front["copy_of"] = doc.locator
     parts = [Part(_joined(_frontmatter(front)), None)]
     for i, section in enumerate(doc.sections):
         if section.anchors:
