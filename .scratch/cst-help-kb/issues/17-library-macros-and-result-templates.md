@@ -4,7 +4,7 @@
 
 **Blocked by:** 29
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `library/Macros/`, `library/Result Templates/` and `library/Includes/` hold the text files (`.mcr`, `.mcs`, `.rtp`, `.bas`, `.cls`, `.txt`) as they are, re-encoded from cp1252 to UTF-8, with the original names kept. Executables, Office files, wheels and project files are left out. Scrambled Macros are listed in `library.md` but not copied.
 - [x] `library.md` has one line per file: kind (control macro, structure macro, Result Template, Include, helper script), menu path and Display Name (folder path plus file stem before `^`), Application Filter, Variants, and the first comment line. An Include's line also names its public procedures.
