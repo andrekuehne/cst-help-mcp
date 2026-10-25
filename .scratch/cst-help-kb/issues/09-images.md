@@ -4,13 +4,13 @@
 
 **Blocked by:** 08
 
-**Status:** ready-for-human
+**Status:** ready-for-agent
 
 - [x] Every Asset records its caption or alt text, dimensions, kind (figure, icon or equation image) and the Documents that reference it.
 - [x] Inline icons stay as small images whose alt text comes from the file name. Logos and WebHelp chrome are dropped.
 - [x] Equation images are marked as not transcribed (ADR 0006).
 - [x] A call returns at most 4 PNG or JPEG images, scaled to at most 1,568 px on the long edge, with their captions. Icons are left out unless asked for.
-- [ ] The figures of FIG-01 and FIG-02 can be retrieved. Manual check: Claude Code displays them. (Retrieval is tested; the manual check in Claude Code is still to do.)
+- [x] The figures of FIG-01 and FIG-02 can be retrieved. Manual check: Claude Code displays them.
 
 ## Comments
 
@@ -42,3 +42,5 @@ Not done here:
 - **Captions** come from alt text only, and CST rarely writes any. The captions in figure-grid cells (such as the polarization page) are not attached to their figures. FIG-01 and FIG-02 have no caption, so agents should read the surrounding Section.
 - **SVG:** no Area built so far references an SVG. The Filter Designer theory SVGs arrive with ticket 21, and SVG conversion is covered by a synthetic test only. Ticket 21 should also add the Filter Designer SVGs to the equation rule, and Innovasys and Sphinx chrome to the dropped images.
 - **Uncounted images:** image files no Document shows are neither Assets nor counted in the report.
+
+**2026-10-25, manual check:** Passed. In Claude Code, `cst_help_images` returned images that Claude Code displayed, among them figures of farfield patterns.
