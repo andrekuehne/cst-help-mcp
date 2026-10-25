@@ -99,6 +99,7 @@ def test_the_build_report_counts_documents_and_lists_failures(tmp_path: Path) ->
         "assets": 0,
         "missing_assets": 0,
         "unsupported": 1,
+        "unpaired_math": 0,
     }
     assert report["complete"] is False
     [failure] = report["failures"]

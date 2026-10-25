@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 BlockKind = Literal[
-    "heading", "paragraph", "note", "list", "field", "code", "table", "figure", "api_signature"
+    "heading", "paragraph", "note", "list", "field", "code", "table", "figure", "api_signature", "equation"
 ]
 LinkStatus = Literal["unresolved", "resolved", "external", "outside"]
 # A figure, a small inline icon, or an equation that exists only as an image (not transcribed, ADR 0006).
@@ -28,6 +28,11 @@ SEPARATOR = " > "
 _LINK_SPAN = re.compile(r"\[((?:\\.|[^\\\]])*)\]\(@(\d+)\)")
 # An image's span: ``![alt](^N)``, N indexing Document.images, with the alt text as written.
 _IMAGE_SPAN = re.compile(r"!\[((?:\\.|[^\\\]])*)\]\(\^(\d+)\)")
+# A formula's span: its TeX as written, between private-use characters that no source text holds,
+# U+E000 and U+E001 for inline math, U+E002 and U+E003 for display math. Nothing escapes inside it.
+_MATH_SPAN = re.compile("([\ue000\ue002])([^\ue000-\ue003]*)[\ue001\ue003]")
+_WHOLE_MATH_SPAN = re.compile("([\ue000\ue002][^\ue000-\ue003]*[\ue001\ue003])")
+_DISPLAY_SPAN = re.compile("\ue002([^\ue000-\ue003]*)\ue003")
 _ESCAPED = re.compile(r"\\(.)")
 _LABEL_SPECIALS = re.compile(r"([\\\[\]])")
 
@@ -74,6 +79,15 @@ class ImageRef:
 def kind_label(kind: AssetKind) -> str:
     """How an Asset's kind is shown; an equation image says that it was not transcribed (ADR 0006)."""
     return "equation image, not transcribed" if kind == "equation" else kind
+
+
+@dataclass(frozen=True)
+class UnpairedMath:
+    """A math delimiter without a partner in its run of text, in a topic that loads MathJax, so it
+    stays text; with the text around it."""
+
+    delimiter: str
+    context: str
 
 
 @dataclass
@@ -126,8 +140,39 @@ def link_spans(text: str) -> list[tuple[str, int]]:
     return [(_ESCAPED.sub(r"\1", m[1]), int(m[2])) for m in _LINK_SPAN.finditer(text)]
 
 
+def math_span(tex: str, display: bool) -> str:
+    return f"\ue002{tex}\ue003" if display else f"\ue000{tex}\ue001"
+
+
+def replace_math(text: str, replace: Callable[[str, bool], str]) -> str:
+    """Replace each math span by ``replace(tex, display)``."""
+    return _MATH_SPAN.sub(lambda m: replace(m[2], m[1] == "\ue002"), text)
+
+
+def split_math(text: str) -> list[str]:
+    """The text split at its math spans: text and spans alternate, starting with text."""
+    return _WHOLE_MATH_SPAN.split(text)
+
+
+def split_display(text: str) -> list[str]:
+    """The text split at its display math: text and the TeX of each displayed formula alternate,
+    starting and ending with text."""
+    return _DISPLAY_SPAN.split(text)
+
+
+def tex_delimited(tex: str, display: bool) -> str:
+    """A formula as Markdown math: ``$...$`` inline, ``$$...$$`` displayed.
+
+    Markdown takes ``$`` for inline math only when no space follows the opening one or precedes the
+    closing one, so inline TeX loses the spaces at its ends, which TeX ignores anyway.
+    """
+    return f"$${tex}$$" if display else f"${tex.strip()}$"
+
+
 def plain(text: str) -> str:
-    """Text with its link spans reduced to their labels, and its image spans to their alt text."""
+    """Text with its link spans reduced to their labels, its image spans to their alt text, and its
+    math spans to their TeX between Markdown math delimiters."""
+    text = replace_math(text, tex_delimited)
     return replace_links(replace_images(text, lambda alt, _: alt), lambda label, _: label)
 
 
@@ -145,8 +190,8 @@ class Block:
 
     def images(self) -> list[int]:
         """The index into its Document's images of each image the block shows, in order."""
-        if self.kind in ("code", "api_signature"):
-            return []  # code is verbatim, never spans
+        if self.kind in ("code", "api_signature", "equation"):
+            return []  # code and an equation's TeX are verbatim, never spans
         texts = [self.term, self.text, *self.items, *(cell for row in self.rows for cell in row)]
         return [index for text in texts for _, index in image_spans(text)]
 
@@ -158,6 +203,8 @@ class Block:
             return "\n".join(" ".join(plain(cell) for cell in row) for row in self.rows)
         if self.kind == "field":
             return f"{plain(self.term)}\n{plain(self.text)}".strip()
+        if self.kind == "equation":
+            return tex_delimited(self.text, True)
         return plain(self.text)
 
 
@@ -208,6 +255,7 @@ class Document:
     context_ids: list[str] = field(default_factory=list)  # context-help map ids
     # The breadcrumb paths embedded in the source, relative to its own project's table of contents.
     breadcrumbs: list[str] = field(default_factory=list)
+    unpaired_math: list[UnpairedMath] = field(default_factory=list)
     generated: bool = False  # written in an agent session, such as a Guide (ADR 0010)
     heuristic: bool = False  # found by the build's heuristics, such as Usages (ADR 0012)
 

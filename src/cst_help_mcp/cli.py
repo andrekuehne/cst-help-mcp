@@ -72,7 +72,8 @@ def _build(args: argparse.Namespace) -> int:
     print(
         f"  unresolved links {report.unresolved_links}, missing anchors {report.missing_anchors},"
         f" missing Assets {len(report.missing_assets)},"
-        f" unsupported items {sum(report.unsupported.values())}"
+        f" unsupported items {sum(report.unsupported.values())},"
+        f" unpaired math delimiters {len(report.unpaired_math)}"
     )
     for failure in report.failures:
         print(f"  failed: {failure.source}: {failure.error}")

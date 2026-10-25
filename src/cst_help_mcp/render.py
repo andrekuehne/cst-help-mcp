@@ -24,6 +24,8 @@ from cst_help_mcp.model import (
     link_spans,
     replace_images,
     replace_links,
+    replace_math,
+    tex_delimited,
 )
 
 
@@ -168,6 +170,8 @@ def _block(block: Block, links: list[Link], images: list[ImageRef]) -> list[tupl
         case "code" | "api_signature":
             fence = _fence(block.text)
             return [(fence + block.language, []), (block.text, []), (fence, [])]
+        case "equation":
+            return [("$$", []), (block.text, []), ("$$", [])]
         case "table":
             # Markdown cannot merge cells, so a table with merged cells stays HTML (ADR 0007).
             if block.spans:
@@ -205,8 +209,9 @@ def _inline(text: str, links: list[Link], images: list[ImageRef]) -> str:
         ref = images[index]
         return f"!{_link(ref.label, ref.file)}" if ref.file else _missing(ref)
 
-    # A rendered image is no link span, so the link spans are replaced after the image spans.
-    return replace_links(replace_images(text, image), markdown)
+    # A rendered image is no link span, so the link spans are replaced after the image spans; the
+    # formulas come last, so their TeX is never read as a span.
+    return replace_math(replace_links(replace_images(text, image), markdown), tex_delimited)
 
 
 def _inline_html(text: str, links: list[Link], images: list[ImageRef]) -> str:

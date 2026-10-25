@@ -25,12 +25,17 @@ from cst_help_mcp.model import (
     ImageRef,
     Link,
     Section,
+    UnpairedMath,
     image_span,
     link_span,
+    math_span,
     plain,
     replace_images,
+    split_display,
+    split_math,
 )
 from cst_help_mcp.navigation import decode_js_string
+from cst_help_mcp.tex import MathConfig, find_math, math_config
 
 
 @dataclass(frozen=True)
@@ -127,7 +132,7 @@ def read_topic(
 ) -> Document:
     soup = BeautifulSoup(html, "html.parser")
     title = _text(soup.title) if soup.title else source_path.rsplit("/", 1)[-1]
-    builder = _DocumentBuilder(title, profile, source_path)
+    builder = _DocumentBuilder(title, profile, source_path, math_config(html))
     body = soup.body or soup
     content = _content_elements(body)
     for element in content:
@@ -146,6 +151,7 @@ def read_topic(
         images=builder.images,
         source_anchors=source_anchors(content),
         breadcrumbs=breadcrumbs(html),
+        unpaired_math=builder.unpaired_math,
     )
 
 
@@ -194,32 +200,46 @@ def source_anchors(content: list[Tag]) -> list[str]:
 
 
 _Register = Callable[[Tag], int | None]
+_Math = Callable[[NavigableString], str]
 
 
-def _text(element: PageElement | None, link: _Register | None = None, image: _Register | None = None) -> str:
+def _text(
+    element: PageElement | None,
+    link: _Register | None = None,
+    image: _Register | None = None,
+    math: _Math | None = None,
+) -> str:
     """An element's text with whitespace collapsed; block-level children are kept apart.
 
     With ``link``, each ``<a>`` that it registers (returning the link's index) becomes a link span;
-    with ``image``, each ``<img>`` that it registers becomes an image span.
+    with ``image``, each ``<img>`` that it registers becomes an image span; with ``math``, each run
+    of text becomes what it gives, the run with its formulas as math spans.
     """
     if element is None:
         return ""
     parts: list[str] = []
-    _collect_text(element, parts, link, image)
+    _collect_text(element, parts, link, image, math)
     return _collapse("".join(parts))
 
 
 def _collapse(text: str) -> str:
-    return re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
+    """Text with its whitespace collapsed, except inside math spans: TeX stays as written."""
+    pieces = split_math(text)
+    pieces[::2] = [re.sub(r"\s+", " ", piece.replace("\xa0", " ")) for piece in pieces[::2]]
+    return "".join(pieces).strip()
 
 
 def _collect_text(
-    element: PageElement, parts: list[str], link: _Register | None, image: _Register | None
+    element: PageElement,
+    parts: list[str],
+    link: _Register | None,
+    image: _Register | None,
+    math: _Math | None,
 ) -> None:
     # Comments (commented-out content) and processing instructions are other string types.
     if isinstance(element, NavigableString):
         if type(element) in (NavigableString, CData):
-            parts.append(str(element))
+            parts.append(str(element) if math is None else math(element))
         return
     if not isinstance(element, Tag) or element.name in ("script", "style"):
         return
@@ -239,15 +259,20 @@ def _collect_text(
             # The label is text only, so the link's images follow it.
             if image is not None:
                 for img in element.find_all("img"):
-                    _collect_text(img, parts, None, image)
+                    _collect_text(img, parts, None, image, math)
             return
     spaced = element.name in _BLOCK_TAGS
     if spaced:
         parts.append(" ")
     for child in element.children:
-        _collect_text(child, parts, link, image)
+        _collect_text(child, parts, link, image, math)
     if spaced:
         parts.append(" ")
+
+
+def _escape_dollars(text: str) -> str:
+    """Text with each dollar escaped for Markdown; one that the source already escapes stays as it is."""
+    return re.sub(r"\\?\$", r"\\$", text)
 
 
 def _alt(element: Tag) -> str:
@@ -318,10 +343,12 @@ class _DocumentBuilder:
     title: str
     profile: Profile
     source_path: str
+    math: MathConfig | None = None  # the topic's MathJax configuration; None for a topic without MathJax
     sections: list[Section] = field(default_factory=list)
     entries: list[ApiEntry] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
     images: list[ImageRef] = field(default_factory=list)
+    unpaired_math: list[UnpairedMath] = field(default_factory=list)
     object_name: str | None = None
     category: str | None = None
     _object_entries: list[ApiEntry] = field(default_factory=list)
@@ -370,7 +397,7 @@ class _DocumentBuilder:
             return
         if role == "term":
             # A field name keeps its icon, such as the solver's icon beside "Time Domain Solver".
-            self._pending_term = _text(element, image=self._image) or None
+            self._pending_term = _text(element, image=self._image, math=self._math) or None
         elif role == "object":
             self._object_heading(_text(element))
         elif role == "category":
@@ -397,8 +424,29 @@ class _DocumentBuilder:
         return target.partition("#")[0].lower() == self.source_path.lower()
 
     def _inline(self, element: Tag) -> str:
-        """An element's text, with link spans for its links and image spans for its images."""
-        return _text(element, self._link, self._image)
+        """An element's text, with link spans for its links, image spans for its images and math spans
+        for its formulas."""
+        return _text(element, self._link, self._image, self._math)
+
+    def _math(self, run: NavigableString) -> str:
+        """A run of text with its formulas as math spans, on a page that loads MathJax.
+
+        A dollar that is text there is escaped, so that a Markdown renderer doesn't take it for math.
+        """
+        if self.math is None:
+            return str(run)
+        elements = [
+            (tag.name, " ".join(tag.get_attribute_list("class")))
+            for tag in reversed(list(run.parents))
+            if tag.name not in ("[document]", "html", "body")
+        ]
+        if not self.math.processes(elements):
+            return _escape_dollars(str(run))
+        pieces, unpaired = find_math(str(run), self.math)
+        self.unpaired_math.extend(u for u in unpaired if u not in self.unpaired_math)
+        return "".join(
+            _escape_dollars(p) if isinstance(p, str) else math_span(p.tex, p.display) for p in pieces
+        )
 
     def _image(self, element: Tag) -> int | None:
         """Register an image; page chrome and images that name no file are left out."""
@@ -530,20 +578,37 @@ class _DocumentBuilder:
         note = _NOTE.match(text)
         if note:
             self._note(text[note.end() :])
-        elif text and not plain(replace_images(text, lambda *_: "")).strip():
+            return
+        text, *displayed = split_display(text)
+        text = text.strip()
+        if text and not plain(replace_images(text, lambda *_: "")).strip():
             self.current.blocks.append(Block("figure", text=text))
         elif text:
             self.current.blocks.append(Block("paragraph", text=text))
+        self._equations(displayed)
 
     def _note(self, text: str) -> None:
-        if text:
-            self.current.blocks.append(Block("note", text=text))
+        text, *displayed = split_display(text)
+        if text.strip():
+            self.current.blocks.append(Block("note", text=text.strip()))
+        self._equations(displayed)
 
     def _field(self, term: str, description: str) -> None:
         if _NOTE.fullmatch(term):
             self._note(description)
-        else:
-            self.current.blocks.append(Block("field", term=term, text=description))
+            return
+        description, *displayed = split_display(description)
+        self.current.blocks.append(Block("field", term=term, text=description.strip()))
+        self._equations(displayed)
+
+    def _equations(self, displayed: list[str]) -> None:
+        """Displayed formulas as equations, each followed by the text after it as a paragraph.
+
+        ``displayed`` alternates a formula's TeX and the text after it, as split_display gives them.
+        """
+        for tex, text in zip(displayed[::2], displayed[1::2], strict=True):
+            self.current.blocks.append(Block("equation", text=tex))
+            self._paragraph(text.strip())
 
     def _list(self, element: Tag) -> None:
         items = element.find_all("li", recursive=False)

@@ -86,6 +86,16 @@ class Failure:
     error: str
 
 
+@dataclass(frozen=True)
+class SourceUnpairedMath:
+    """A math delimiter without its partner, as the report lists it: the Document's source path,
+    the delimiter and the text around it."""
+
+    source: str
+    delimiter: str
+    context: str
+
+
 @dataclass
 class BuildReport:
     """What a Build found and what it could not convert. Written as report.json in every Build."""
@@ -98,6 +108,8 @@ class BuildReport:
     # Images whose file is missing from the release folder, or can't be read as an image.
     missing_assets: list[SourceLink] = field(default_factory=list)
     failures: list[Failure] = field(default_factory=list)
+    # Math delimiters without a partner, in topics that load MathJax, so they stay text.
+    unpaired_math: list[SourceUnpairedMath] = field(default_factory=list)
     links: LinkReport = field(default_factory=LinkReport)
     navigation: NavigationReport = field(default_factory=NavigationReport)
     unsupported: Counter[str] = field(default_factory=Counter)  # files no reader handles, by extension
@@ -137,6 +149,7 @@ class BuildReport:
                 "assets": self.assets,
                 "missing_assets": len(self.missing_assets),
                 "unsupported": sum(self.unsupported.values()),
+                "unpaired_math": len(self.unpaired_math),
             },
             "api_entries": self.api_entries,
             "links": {status: self.links.statuses[status] for status in get_args(LinkStatus)},
@@ -145,6 +158,7 @@ class BuildReport:
             "missing_anchors": [asdict(u) for u in self.links.missing_anchors],
             "missing_assets": [asdict(m) for m in self.missing_assets],
             "navigation": asdict(self.navigation),
+            "unpaired_math": [asdict(u) for u in self.unpaired_math],
             "failures": [asdict(f) for f in self.failures],
             "unsupported": dict(sorted(self.unsupported.items())),
         }
@@ -173,6 +187,9 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
     apply_navigation(docs, navigation)
     docs = _merge_aliases(docs)
     report.aliases = report.converted - len(docs)
+    report.unpaired_math = [
+        SourceUnpairedMath(doc.source_path, u.delimiter, u.context) for doc in docs for u in doc.unpaired_math
+    ]
     if not docs:
         raise BuildError(
             f"No Documents could be converted for collection '{collection.name}': {_listed(report)}"
