@@ -4,7 +4,7 @@
 
 **Blocked by:** 17
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] App descriptors give the menu names in `library.md`.
 - [x] Only modules with VBA strings or `cst.*` calls are copied, and the selection is reported.
