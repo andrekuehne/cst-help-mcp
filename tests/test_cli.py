@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from kb_helpers import SOLVER_HF, write_config
+from kb_helpers import SOLVER_HF, topic, write_config, write_release
 
 from cst_help_mcp.cli import main
 
@@ -23,6 +23,72 @@ def test_build_from_cli(corpus_2024: Path, tmp_path: Path, capsys: pytest.Captur
     assert code == 0
     assert "Built cst-2024" in capsys.readouterr().out
     assert (tmp_path / "kb" / "cst-2024" / SOLVER_HF).is_file()
+
+
+def test_build_from_a_release_folder_without_a_configuration(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    release = write_release(tmp_path / "install", {"widgets/widget.htm": topic("Widget", "Spin", "Spins.")})
+    kb = tmp_path / "elsewhere" / "kb"
+
+    code = main(["build", "cst-2024", "--source", str(release), "--kb", str(kb)])
+
+    assert code == 0
+    assert "Built cst-2024" in capsys.readouterr().out
+    page = (kb / "cst-2024" / "vba_3d" / "widgets" / "widget.htm.md").read_text(encoding="utf-8")
+    assert page.startswith('---\nrelease: "2024"\n')
+    assert "Spins." in page
+
+
+def test_build_from_a_release_folder_takes_the_release_for_any_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    release = write_release(tmp_path / "install", {"widgets/widget.htm": topic("Widget", "Spin", "Spins.")})
+    kb = tmp_path / "kb"
+
+    code = main(["build", "latest", "--source", str(release), "--kb", str(kb), "--release", "2025"])
+
+    assert code == 0
+    page = (kb / "latest" / "vba_3d" / "widgets" / "widget.htm.md").read_text(encoding="utf-8")
+    assert page.startswith('---\nrelease: "2025"\n')
+
+
+def test_build_from_a_release_folder_needs_a_release_its_name_lacks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    release = write_release(tmp_path / "install", {})
+
+    code = main(["build", "latest", "--source", str(release), "--kb", str(tmp_path / "kb")])
+
+    assert code == 2
+    assert "Collection 'latest' needs --release" in capsys.readouterr().err
+
+
+def test_build_from_a_missing_release_folder_fails_clearly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["build", "cst-2024", "--source", str(tmp_path / "nope"), "--kb", str(tmp_path / "kb")])
+
+    assert code == 2
+    assert "Source folder of collection 'cst-2024' does not exist" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("flags", "message"),
+    [
+        (["--source", "x"], "--source and --kb go together"),
+        (["--kb", "x"], "--source and --kb go together"),
+        (["--source", "x", "--kb", "y", "--config", "z.toml"], "in place of --config"),
+        (["--release", "2024"], "--release goes with --source"),
+    ],
+)
+def test_build_flags_that_do_not_go_together_fail_clearly(
+    flags: list[str], message: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit):
+        main(["build", "cst-2024", *flags])
+
+    assert message in capsys.readouterr().err
 
 
 def test_missing_configuration_fails_clearly(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

@@ -15,7 +15,7 @@ from typing import Any, get_args
 from cst_help_mcp import layout
 from cst_help_mcp.assembly import assemble
 from cst_help_mcp.assets import write_assets
-from cst_help_mcp.config import PDF_FOLDER, CollectionConfig, SourceConfig, load_config
+from cst_help_mcp.config import PDF_FOLDER, CollectionConfig, Config, SourceConfig, load_config
 from cst_help_mcp.errors import BuildError
 from cst_help_mcp.library import Library, read_library, write_library
 from cst_help_mcp.links import Inventory, LinkReport, ReleaseFiles, SourceLink, resolve_links
@@ -220,11 +220,16 @@ class BuildResult:
 
 
 def build_collection(config_path: Path, collection_name: str, *, strict: bool = False) -> BuildResult:
-    """Build a Collection into a new Build, then assemble it into the Knowledge Base.
+    """Build a Collection of a configuration file into a new Build, then assemble it into the
+    Knowledge Base.
 
     A failed Document leaves the Build incomplete, or with ``strict`` fails the whole build.
     """
-    config = load_config(config_path)
+    return build_configured(load_config(config_path), collection_name, strict=strict)
+
+
+def build_configured(config: Config, collection_name: str, *, strict: bool = False) -> BuildResult:
+    """Build a Collection of a configuration, however it was given, as `build_collection` does."""
     collection = config.collection(collection_name)
     report = BuildReport()
     docs: list[Document] = []

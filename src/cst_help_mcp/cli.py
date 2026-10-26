@@ -33,9 +33,18 @@ def _parser() -> argparse.ArgumentParser:
 
     build = commands.add_parser("build", help="build one Collection into the Knowledge Base")
     build.add_argument("collection")
-    build.add_argument("--config", type=Path, default=Path(DEFAULT_CONFIG))
+    build.add_argument("--config", type=Path, help=f"the configuration file (default: {DEFAULT_CONFIG})")
+    build.add_argument(
+        "--source",
+        type=Path,
+        help="a CST release folder, such as an installation, to build without a configuration",
+    )
+    build.add_argument("--kb", type=Path, help="the Knowledge Base folder, with --source")
+    build.add_argument(
+        "--release", help="the Collection's Release, with --source (default: from its name, cst-2024)"
+    )
     build.add_argument("--strict", action="store_true", help="fail the build if any Document fails")
-    build.set_defaults(run=_build)
+    build.set_defaults(run=_build, parser=build)
 
     assemble = commands.add_parser(
         "assemble", help="assemble the newest Build of every Collection into the Knowledge Base"
@@ -64,9 +73,22 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _build(args: argparse.Namespace) -> int:
-    from cst_help_mcp.build import build_collection
+    from cst_help_mcp.build import build_collection, build_configured
+    from cst_help_mcp.config import command_line_config
 
-    result = build_collection(args.config, args.collection, strict=args.strict)
+    if args.source or args.kb:
+        if args.config:
+            args.parser.error(
+                "--source and --kb describe the Collection in place of --config; give one or the other"
+            )
+        if not (args.source and args.kb):
+            args.parser.error("--source and --kb go together")
+        config = command_line_config(args.kb, args.collection, args.source, args.release)
+        result = build_configured(config, args.collection, strict=args.strict)
+    elif args.release:
+        args.parser.error("--release goes with --source; a configuration file gives the Release itself")
+    else:
+        result = build_collection(args.config or Path(DEFAULT_CONFIG), args.collection, strict=args.strict)
     report = result.report
     print(
         f"Built {args.collection}: {report.documents} Documents,"

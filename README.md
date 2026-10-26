@@ -72,6 +72,14 @@ uv run cst-help build cst-2024 --config cst-help.toml
 uv run cst-help validate --kb C:\cst-help-kb
 ```
 
+A single Release builds without a TOML file too: `--source` names the installation (or a copy of
+its `Online Help`, `Documentation` and `Library` folders) and `--kb` the Knowledge Base. The Release
+comes from a name like `cst-2024`, or from `--release`.
+
+```bash
+uv run cst-help build cst-2024 --source "C:\Program Files (x86)\CST Studio Suite 2024" --kb C:\cst-help-kb
+```
+
 `build` converts the Collection into a new Build and assembles it: the Release folder switches to the
 new Build only once it is complete. `--strict` fails the build if any Document fails. `assemble`
 rebuilds the Release folders from the newest Builds, which also repairs a damaged folder.

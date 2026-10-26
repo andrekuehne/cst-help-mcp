@@ -10,9 +10,11 @@ from typing import Any
 
 from cst_help_mcp.errors import ConfigError
 
-SOURCE_TYPES = ("cst-release", "pdf-folder")
+# The Source type that reads a CST release folder, such as an installation.
+CST_RELEASE = "cst-release"
 # The Source type that makes a Collection release-independent.
 PDF_FOLDER = "pdf-folder"
+SOURCE_TYPES = (CST_RELEASE, PDF_FOLDER)
 
 
 @dataclass(frozen=True)
@@ -84,11 +86,31 @@ def _collection(path: Path, base: Path, name: str, data: dict[str, Any]) -> Coll
             )
         return CollectionConfig(name=name, release="", sources=sources)
     if release is None:
-        match = re.fullmatch(r"cst-(\d+)", name)
-        if not match:
+        release = _release_named(name)
+        if release is None:
             raise ConfigError(f"{path}: collection '{name}' needs a 'release'")
-        release = match.group(1)
     return CollectionConfig(name=name, release=str(release), sources=sources)
+
+
+def command_line_config(kb_path: Path, name: str, source: Path, release: str | None = None) -> Config:
+    """The configuration `build --source --kb` describes: one Collection read from one CST release
+    folder, such as an installation. Its Release comes from a name like cst-2024 unless given."""
+    if release is None:
+        release = _release_named(name)
+        if release is None:
+            raise ConfigError(f"Collection '{name}' needs --release: its name is not cst-<release>")
+    if not source.is_dir():
+        raise ConfigError(f"Source folder of collection '{name}' does not exist: {source}")
+    sources = [SourceConfig(type=CST_RELEASE, path=source)]
+    return Config(
+        kb_path=kb_path, collections={name: CollectionConfig(name=name, release=release, sources=sources)}
+    )
+
+
+def _release_named(name: str) -> str | None:
+    """The Release a Collection's name gives, as cst-2024 gives 2024."""
+    match = re.fullmatch(r"cst-(\d+)", name)
+    return match.group(1) if match else None
 
 
 def _source(path: Path, base: Path, collection: str, data: dict[str, Any]) -> SourceConfig:
