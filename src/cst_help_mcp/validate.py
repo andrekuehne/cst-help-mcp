@@ -4,6 +4,7 @@ between the files of each readable view."""
 from __future__ import annotations
 
 import html
+import posixpath
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -116,13 +117,14 @@ def _check_entry_files(kb_path: Path, view: Path, build: Path) -> list[str]:
 def _check_links(kb_path: Path, view: Path) -> list[str]:
     """Every link and image between the view's Markdown files leads to a file of the view.
 
-    Links are Locators, relative to the view's root. Fragments are not checked: the build report
-    lists the fragments that match no anchor.
+    Links are relative to the file that holds them, and are reported by the path in the view they
+    lead to. Fragments are not checked: the build report lists the fragments that match no anchor.
     """
     problems = []
     for page in sorted(view.rglob("*.md")):
         if page.relative_to(view).parts[0] == layout.WORK_DIR:
             continue  # what agents write there is theirs, not the Knowledge Base's
+        folder = page.parent.relative_to(view).as_posix()
         text = _CODE_SPAN.sub("", _FENCED.sub("", page.read_text(encoding="utf-8")))
         targets = [a or b for a, b in _MARKDOWN_TARGET.findall(text)]
         targets += [html.unescape(t) for t in _HTML_TARGET.findall(text)]
@@ -130,7 +132,8 @@ def _check_links(kb_path: Path, view: Path) -> list[str]:
             path = target.partition("#")[0]
             if not path or _SCHEME.match(path):
                 continue
-            if not (view / path).is_file():
+            path = posixpath.normpath(posixpath.join(folder, path))
+            if path.startswith("../") or not (view / path).is_file():
                 problems.append(f"{_shown(kb_path, page)} links to {path}, which is missing")
     return problems
 

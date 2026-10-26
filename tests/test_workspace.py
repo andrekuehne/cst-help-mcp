@@ -83,7 +83,11 @@ def test_agents_md_counts_the_pages_of_each_folder_and_lists_the_index_files(tmp
 
 def test_agents_md_lists_the_guides_and_says_they_are_generated(tmp_path: Path) -> None:
     folder = _build(tmp_path)
-    assert "There are no Guides yet" in (folder / "AGENTS.md").read_text(encoding="utf-8")
+    agents = (folder / "AGENTS.md").read_text(encoding="utf-8")
+    assert "There are no Guides yet" in agents
+    # Links between pages, and from a Guide, are relative to the file that holds them (ticket 26).
+    assert "relative to the page that holds them" in agents
+    assert "`../`" in agents.partition("## Guides\n")[2]
     (folder / "guides" / "ports.md").write_text("# Ports\n", encoding="utf-8")
 
     assert main(["assemble", "--kb", str(tmp_path / "kb")]) == 0

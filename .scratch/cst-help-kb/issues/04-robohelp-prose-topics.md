@@ -12,7 +12,7 @@
 - [x] Popup links become ordinary links, and commented-out content is dropped.
 - [x] Topics that appear in no table of contents are included.
 - [x] Topics published identically in several places become one Document, with the other paths as Aliases.
-- [x] Links are resolved in two passes, without regard to case, and rewritten as Locators. Each link is marked resolved, unresolved, external or outside the corpus, and the report lists the unresolved ones.
+- [x] Links are resolved in two passes, without regard to case, and rewritten as links to the target's Locator (since ticket 26, relative to the linking file). Each link is marked resolved, unresolved, external or outside the corpus, and the report lists the unresolved ones.
 - [x] Corpus tests check representative pages, such as the Brick dialog page and the polarization theory page, by their rendered Markdown and by search.
 
 ## Comments
@@ -38,7 +38,7 @@ Decisions for later tickets:
   - **outside:** a file that exists in the release folder but is no Document of this Build: a project not read yet or filtered out, a PDF, an image or a download. The report's `outside_links` counts them by project folder, or by file type for files that aren't topics.
   - **unresolved:** a file that exists nowhere in the release folder, including paths above it. In `.ingestion/2024` that includes the links to `Videos/`, which isn't shipped there. Unresolved links never fail a build, even with `--strict`.
   - **missing anchors:** a resolved link whose fragment matches no Section anchor and no `id` or `name` in the target's source (`Document.source_anchors`) is listed in the report's `missing_anchors`. The 7 in the corpus are anchors CST renamed, such as `#Mesh_Control_Regions` for `Mesh_Control_Items`.
-  - Links render as Collection-relative Locators (`[label](3d/….htm.md#anchor)`), not file-relative paths, as the ticket asks. Ticket 26 makes them work in ordinary Markdown readers. Unresolved and outside links render as their label only.
+  - Links first rendered as Collection-relative Locators (`[label](3d/….htm.md#anchor)`). Ticket 26 changed them to paths relative to the linking file (`[label](../common_general/common_general_name.htm.md#rules)`), so ordinary Markdown viewers follow them. Unresolved and outside links render as their label only.
   - The report has `links` (counts by status) and `unresolved_links` (source and href of each).
   - **Ticket 08** can list a Section's outgoing links from its spans.
 - **Aliases.**

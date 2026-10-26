@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import posixpath
 import re
 from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
@@ -20,7 +21,6 @@ from cst_help_mcp.model import (
     ImageRef,
     Link,
     NavNode,
-    escape_label,
     image_spans,
     link_spans,
     replace_images,
@@ -28,6 +28,28 @@ from cst_help_mcp.model import (
     replace_math,
     tex_delimited,
 )
+
+# What a block's text holds besides source text, and is not escaped again: a formula, an image or a
+# link span, a code span, and the escapes the readers write, ``\$`` and ``\<``.
+_MARKUP = re.compile(
+    "([\ue000\ue002][^\ue000-\ue003]*[\ue001\ue003]"
+    r"|!?\[(?:\\.|[^\\\]])*\]\([@^]\d+\)"
+    r"|(?<!`)(`+)(?!`).+?(?<!`)\2(?!`)"
+    r"|\\[$<])"
+)
+_READER_ESCAPE = re.compile(r"\\([$<])")
+# Source text that Markdown reads as markup: a backslash before punctuation, emphasis, code and
+# strikethrough marks, a tag, an entity, and the bracket that would close a link.
+_SPECIAL = re.compile(r"\\(?=[!-/:-@\[-`{-~])|[*`~]|<(?=[A-Za-z/!?])|&(?=#?\w+;)|\](?=[(\[])")
+# Underscores mark emphasis only in pairs that open before a word and close after one, as in
+# ``__init__``; an underscore between letters or digits never does. Others stay as they are, so
+# that names such as ``_cst_eda_interface`` grep as written.
+_UNDERSCORE_PAIR = re.compile(r"(?<![^\W_])_+(?=\S).*?(?<=\S)_+(?![^\W_])", re.DOTALL)
+_EDGE_UNDERSCORE = re.compile(r"(?<![^\W_])_|_(?![^\W_])")
+# Dollars outside formulas are text, but viewers that read math pair any two of them, as in
+# ``[Left$](...) and [Mid$](...)``; a lone one, as in ``Dir$``, stays as it is.
+_DOLLAR = re.compile(r"\$")
+_BRACKET = re.compile(r"[\[\]]")
 
 
 @dataclass(frozen=True)
@@ -46,12 +68,18 @@ class Part:
     images: tuple[int, ...] = ()
 
 
-def render_markdown(doc: Document, copy: bool = False) -> str:
-    """A Document's Markdown; a copy's frontmatter names the Locator to cite, the Document's own."""
-    return "".join(part.text for part in render_parts(doc, copy))
+def render_markdown(doc: Document, at: str = "") -> str:
+    """A Document's Markdown, written at its Locator or, for a copy, at the path ``at`` in the tree.
+
+    Links and images are relative to the file they are written in. A copy's frontmatter names the
+    Locator to cite, the Document's own.
+    """
+    return "".join(part.text for part in render_parts(doc, at))
 
 
-def render_parts(doc: Document, copy: bool = False) -> list[Part]:
+def render_parts(doc: Document, at: str = "") -> list[Part]:
+    at = at or doc.locator
+    base = posixpath.dirname(at)
     front: dict[str, object] = {
         "release": doc.release,
         "area": doc.area,
@@ -71,14 +99,14 @@ def render_parts(doc: Document, copy: bool = False) -> list[Part]:
         front["aliases"] = doc.aliases
     if doc.alias_areas:
         front["alias_areas"] = doc.alias_areas
-    if copy:
+    if at != doc.locator:
         front["copy_of"] = doc.locator
     parts = [Part(_joined(_frontmatter(front)), None)]
     for i, section in enumerate(doc.sections):
         if section.anchors:
             parts.append(Part(_joined([f'<a id="{anchor}"></a>' for anchor in section.anchors]), i))
         for block in section.blocks:
-            for line, sources in _block(block, doc.links, doc.images):
+            for line, sources in _block(block, doc.links, doc.images, base):
                 spans = tuple(span for source in sources for span in link_spans(source))
                 images = tuple(index for source in sources for _, index in image_spans(source))
                 parts.append(Part(f"{line}\n", i, spans, images))
@@ -112,7 +140,7 @@ def render_navigation(release: str, title: str, nodes: list[NavNode]) -> str:
 
     def add(nodes: list[NavNode], depth: int) -> None:
         for node in nodes:
-            label = _link(node.name, node.locator) if node.locator else node.name
+            label = _link(node.name, node.locator) if node.locator else _text(node.name)
             lines.append(f"{'  ' * depth}- {label}")
             add(node.children, depth + 1)
 
@@ -133,7 +161,7 @@ def render_api(release: str, entries: list[ApiLine]) -> str:
         signature = " ".join(entry.signature.split())
         # The Locator is code, not a link, so that a grep line stays short.
         locator = f"{entry.locator}#{entry.anchor}"
-        cells = [entry.qualified_name, entry.area, _code(signature), _code(locator)]
+        cells = [_text(entry.qualified_name), _text(entry.area), _code(signature), _code(locator)]
         lines.append(_row(cells))
     return "\n".join(lines) + "\n"
 
@@ -161,14 +189,14 @@ def render_library(release: str, lines: list[LibraryLine]) -> str:
         out += [f"## {folder}", "", _row([*header, "First comment"])]
         out.append("|" + "---|" * (len(header) + 1))
         for line in folder_lines:
-            cells = [_code(line.locator), line.kind, line.display_name]
+            cells = [_code(line.locator), line.kind, _text(line.display_name)]
             if python:
-                cells += [line.restricted_to, ", ".join(_code(m) for m in line.modules)]
+                cells += [_text(line.restricted_to), ", ".join(_code(m) for m in line.modules)]
             elif includes:
-                cells.append(", ".join(line.helpers))
+                cells.append(", ".join(_text(helper) for helper in line.helpers))
             else:
-                cells += [line.application_filter, ", ".join(_code(v) for v in line.variants)]
-            cells.append(line.description)
+                cells += [_text(line.application_filter), ", ".join(_code(v) for v in line.variants)]
+            cells.append(_text(line.description))
             out.append(_row(cells))
         out.append("")
     return "\n".join(out)
@@ -190,11 +218,11 @@ def render_materials(release: str, lines: list[LibraryLine]) -> str:
         folder = line.locator.rpartition("/")[0]
         cells = [
             _code(line.locator),
-            line.display_name,
-            line.base_name,
+            _text(line.display_name),
+            _text(line.base_name),
             ", ".join(_code(v) for v in line.variants),
             ", ".join(_link(PurePosixPath(s).stem, f"{folder}/{s}") for s in line.same_definition),
-            line.description,
+            _text(line.description),
         ]
         out.append(_row(cells))
     return "\n".join(out) + "\n"
@@ -216,17 +244,53 @@ def _frontmatter(front: dict[str, object]) -> list[str]:
     return ["---", *(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in front.items()), "---", ""]
 
 
+def _text(text: str) -> str:
+    """Plain text, such as a name or an alt text, escaped for Markdown."""
+    return _escape_source(text, brackets=True)
+
+
+def _escape_source(text: str, brackets: bool = False, block: str = "") -> str:
+    """Model text with its source text escaped where Markdown would read it as markup, outside its
+    spans and the readers' own escapes; with ``brackets``, every bracket too, as a link label needs.
+
+    Underscores and dollars are escaped only where ``block``, the whole text of the line they end up
+    in (``text`` itself by default), holds a pair of them that a viewer would read as markup.
+    """
+    block = replace_math(_READER_ESCAPE.sub("", block or text), lambda *_: "")
+    underscores = _UNDERSCORE_PAIR.search(block) is not None
+    dollars = len(_DOLLAR.findall(block)) > 1
+
+    def escape(plain: str) -> str:
+        plain = _SPECIAL.sub(lambda m: f"\\{m[0]}", plain)
+        if underscores:
+            plain = _EDGE_UNDERSCORE.sub(r"\\_", plain)
+        if dollars:
+            plain = _DOLLAR.sub(r"\\$", plain)
+        return _BRACKET.sub(lambda m: f"\\{m[0]}", plain) if brackets else plain
+
+    # Split by the markup, the pieces are source text, the markup and its backtick group, in turn.
+    pieces = _MARKUP.split(text)
+    return "".join(escape(piece) if i % 3 == 0 else piece for i, piece in enumerate(pieces) if i % 3 != 2)
+
+
 def _link(label: str, href: str) -> str:
+    """A link labelled with plain text."""
+    return _markdown_link(_text(label), href)
+
+
+def _markdown_link(label: str, href: str) -> str:
+    """A link whose label is already Markdown."""
     if re.search(r"[\s()<>]", href):
         href = f"<{href}>"
-    return f"[{escape_label(label)}]({href})"
+    return f"[{label}]({href})"
 
 
-def _block(block: Block, links: list[Link], images: list[ImageRef]) -> list[tuple[str, list[str]]]:
-    """The block's lines, each with the model texts whose links and images it shows."""
+def _block(block: Block, links: list[Link], images: list[ImageRef], base: str) -> list[tuple[str, list[str]]]:
+    """The block's lines, each with the model texts whose links and images it shows; ``base`` is the
+    folder of the file they are written in."""
 
     def inline(text: str) -> str:
-        return _inline(text, links, images)
+        return _inline(text, links, images, base)
 
     match block.kind:
         case "heading":
@@ -243,7 +307,7 @@ def _block(block: Block, links: list[Link], images: list[ImageRef]) -> list[tupl
             quoted: list[tuple[str, list[str]]] = [(f"> **{inline(block.term)}**", [block.term])]
             for child in block.blocks:
                 quoted.append((">", []))
-                for line, sources in _block(child, links, images):
+                for line, sources in _block(child, links, images, base):
                     quoted.extend(
                         (f"> {piece}" if piece else ">", sources if i == 0 else [])
                         for i, piece in enumerate(line.split("\n"))
@@ -260,7 +324,7 @@ def _block(block: Block, links: list[Link], images: list[ImageRef]) -> list[tupl
         case "table":
             # Markdown cannot merge cells, so a table with merged cells stays HTML (ADR 0007).
             if block.spans:
-                cells = [[_inline_html(c, links, images) for c in r] for r in block.rows]
+                cells = [[_inline_html(c, links, images, base) for c in r] for r in block.rows]
                 rows = _html_table(cells, block.spans)
                 return list(zip(rows, [[], *block.rows, []], strict=True))
             rows = _table([[inline(c) for c in r] for r in block.rows])
@@ -276,47 +340,60 @@ def _unmarked(line: str) -> str:
     return f"{line[: number.end()]}\\{line[number.end() :]}" if number else line
 
 
-def _href(link: Link) -> str | None:
-    """Where a rendered link leads: its Locator, or its URL. Other links render as their label."""
+def _relative(target: str, base: str) -> str:
+    """A path in the tree, with its anchor, as a link from a file in the folder ``base``."""
+    path, sep, anchor = target.partition("#")
+    return posixpath.relpath(path, base or ".") + sep + anchor
+
+
+def _href(link: Link, base: str) -> str | None:
+    """Where a rendered link leads: its Locator, relative to the folder ``base``, or its URL. Other
+    links render as their label."""
     if link.status == "resolved":
-        return link.target
+        return _relative(link.target, base)
     if link.status == "external":
         return link.href
     return None
 
 
-def _inline(text: str, links: list[Link], images: list[ImageRef]) -> str:
+def _inline(text: str, links: list[Link], images: list[ImageRef], base: str) -> str:
     def markdown(label: str, index: int) -> str:
-        href = _href(links[index])
-        return label if href is None else _link(label, href)
+        href = _href(links[index], base)
+        escaped = _escape_source(label, brackets=True, block=text)
+        return escaped if href is None else _markdown_link(escaped, href)
 
     def image(_: str, index: int) -> str:
         ref = images[index]
-        return f"!{_link(ref.label, ref.file)}" if ref.file else _missing(ref)
+        return f"!{_link(ref.label, _relative(ref.file, base))}" if ref.file else _missing(ref)
 
     # A rendered image is no link span, so the link spans are replaced after the image spans; the
     # formulas come last, so their TeX is never read as a span.
-    return replace_math(replace_links(replace_images(text, image), markdown), tex_delimited)
+    escaped = _escape_source(text)
+    return replace_math(replace_links(replace_images(escaped, image), markdown), tex_delimited)
 
 
-def _inline_html(text: str, links: list[Link], images: list[ImageRef]) -> str:
+def _inline_html(text: str, links: list[Link], images: list[ImageRef], base: str) -> str:
     anchors: list[str] = []
 
     def placeholder(label: str, index: int) -> str:
-        href = _href(links[index])
-        label = html.escape(label, quote=False)
+        href = _href(links[index], base)
+        label = html.escape(_READER_ESCAPE.sub(r"\1", label), quote=False)
         anchors.append(label if href is None else f'<a href="{html.escape(href)}">{label}</a>')
         return f"\x00{len(anchors) - 1}\x00"
 
     def image(_: str, index: int) -> str:
         ref = images[index]
         if ref.file:
-            anchors.append(f'<img src="{html.escape(ref.file)}" alt="{html.escape(ref.label)}">')
+            anchors.append(
+                f'<img src="{html.escape(_relative(ref.file, base))}" alt="{html.escape(ref.label)}">'
+            )
         else:
             anchors.append(html.escape(_missing(ref), quote=False))
         return f"\x00{len(anchors) - 1}\x00"
 
-    escaped = html.escape(replace_links(replace_images(text, image), placeholder), quote=False)
+    # HTML takes no Markdown escapes, so the readers' are undone.
+    text = _READER_ESCAPE.sub(r"\1", replace_links(replace_images(text, image), placeholder))
+    escaped = html.escape(text, quote=False)
     return re.sub(r"\x00(\d+)\x00", lambda m: anchors[int(m[1])], escaped)
 
 

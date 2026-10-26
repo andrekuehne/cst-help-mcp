@@ -29,14 +29,14 @@ def test_the_brick_dialog_page_renders_its_prose_and_field_definitions(prose_bui
     # The introduction is <h3> in the source.
     assert (
         "\n\nIn this dialog box you may specify the dimensions of a brick either numerically or by using"
-        " [expressions](3d/common_general/common_general_expression.htm.md)."
+        " [expressions](../common_general/common_general_expression.htm.md)."
     ) in md
     assert (
-        "\n**Name**\n: Specify the unique [name](3d/common_general/common_general_name.htm.md) for the brick.\n"
+        "\n**Name**\n: Specify the unique [name](../common_general/common_general_name.htm.md) for the brick.\n"
         in md
     )
     assert "\n**Cancel**\n: Closes this dialog box without performing any further action.\n" in md
-    assert "[Sphere](3d/common_struct/common_struct_sphere.htm.md), [Cylinder](" in md
+    assert "[Sphere](common_struct_sphere.htm.md), [Cylinder](" in md
 
 
 def test_the_navigation_boilerplate_is_left_out(prose_build: ProseBuild) -> None:
@@ -73,9 +73,10 @@ def test_subheadings_open_sections_and_back_to_top_links_are_dropped(prose_build
 
 def test_note_paragraphs_become_notes(prose_build: ProseBuild) -> None:
     # <p class="Topic-Text-Indent"><span>Note:</span> ...</p>
-    assert "\n> **Note:** For changing the name of a curve item, please choose [Navigation tree:](" in _md(
-        prose_build, "3d/common_struct/common_struct_changecurve.htm.md"
-    )
+    curve = _md(prose_build, "3d/common_struct/common_struct_changecurve.htm.md")
+    assert "\n> **Note:** For changing the name of a curve item, please choose [Navigation tree:](" in curve
+    # The placeholder is escaped, so that a Markdown viewer doesn't take it for an HTML tag.
+    assert " Curves > \\<Curve item name> > Rename." in curve
     # <p class="Tip-Note-Heading">Note:</p> followed by the note's text.
     assert "\n> **Note:** Selecting the center of the twist by a User defined center" in _md(
         prose_build, "3d/cbls/creating_harness/cable_library/cable_groups.htm.md"
@@ -87,7 +88,7 @@ def test_simple_tables_render_as_markdown(prose_build: ProseBuild) -> None:
 
     # A figure grid: the figures in the first row, their captions below them.
     assert re.search(
-        r"\n\| !\[\]\(assets/\w+\.png\) \| !\[\]\(assets/\w+\.png\) \|\n\|---\|---\|\n"
+        r"\n\| !\[\]\(\.\./\.\./assets/\w+\.png\) \| !\[\]\(\.\./\.\./assets/\w+\.png\) \|\n\|---\|---\|\n"
         r"\| Left circular polarization \(LCP\) \| Right circular polarization \(RCP\) \|\n",
         md,
     )
@@ -96,7 +97,10 @@ def test_simple_tables_render_as_markdown(prose_build: ProseBuild) -> None:
 def test_tables_with_merged_cells_stay_html(prose_build: ProseBuild) -> None:
     md = _md(prose_build, "3d/special_solvopt/special_solvopt_lumpedelements.htm.md")
 
-    assert '<td colspan="3">Multipin sub-element Define an element to be used with a <a href="3d/' in md
+    assert (
+        '<td colspan="3">Multipin sub-element Define an element to be used with a '
+        '<a href="special_solvopt_multipin_lumpedelements.htm.md">'
+    ) in md
 
 
 def test_commented_out_content_is_dropped(prose_build: ProseBuild) -> None:
@@ -104,13 +108,15 @@ def test_commented_out_content_is_dropped(prose_build: ProseBuild) -> None:
     assert "Modal Analysis" not in _md(prose_build, "3d/special_overview/special_overview_whichsolver.htm.md")
 
 
-def test_links_are_resolved_without_regard_to_case_and_rewritten_as_locators(prose_build: ProseBuild) -> None:
+def test_links_are_resolved_without_regard_to_case_and_written_relative_to_the_linking_file(
+    prose_build: ProseBuild,
+) -> None:
     # The source links to userinterface/views/ParametricResultsOverview.htm; the file is lowercase.
-    assert "[Parametric Results Overview](userinterface/views/parametricresultsoverview.htm.md)" in _md(
+    assert "[Parametric Results Overview](../../userinterface/views/parametricresultsoverview.htm.md)" in _md(
         prose_build, "3d/special_postpr/special_postpr_sensitivity_tuning.htm.md"
     )
     # A fragment into another project resolves to the target Section's anchor.
-    assert "The [Preferences](userinterface/dialog/options.htm.md#options_preferences) dialog" in _md(
+    assert "The [Preferences](../userinterface/dialog/options.htm.md#options_preferences) dialog" in _md(
         prose_build, "general/common_overview_autoupdate.htm.md"
     )
 
@@ -120,7 +126,7 @@ def test_popup_links_become_ordinary_links(prose_build: ProseBuild) -> None:
     md = _md(prose_build, "3d/special_solvopt/special_solvopt_cht_time_step_settings.htm.md")
 
     assert (
-        ".png) [Simulation:](3d/common_ribbons/3d/common_ribbons_simulation_hf.htm.md) Solver > Setup Solver"
+        ".png) [Simulation:](../common_ribbons/3d/common_ribbons_simulation_hf.htm.md) Solver > Setup Solver"
         in md
     )
 
@@ -152,8 +158,8 @@ def test_ribbon_topics_copied_into_the_3d_project_are_aliases_of_the_general_one
     assert '"Online Help/mergedProjects/3D/common_ribbons/3d/common_ribbons_modeling.htm"' in md
     assert not (prose_build.tree / "3d/common_ribbons/3d/common_ribbons_modeling.htm.md").exists()
     # A link to the 3D copy reaches the Document (the Brick dialog's ribbon path).
-    assert "## ![shape brick icon](assets/" in _md(prose_build, BRICK)
-    assert f" [Modeling:]({MODELING_RIBBON}) Shapes > Brick\n" in _md(prose_build, BRICK)
+    assert "## ![shape brick icon](../../assets/" in _md(prose_build, BRICK)
+    assert f" [Modeling:](../../{MODELING_RIBBON}) Shapes > Brick\n" in _md(prose_build, BRICK)
     assert prose_build.report["counts"]["aliases"] > 10
 
 

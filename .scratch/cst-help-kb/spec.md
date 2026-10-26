@@ -181,6 +181,7 @@ There is no server, no database and no ranking (ADR 0014). A client without file
 ### The Document model and readers
 
 - **The model** (ADR 0007): readers parse each Source into our own Document model of typed blocks (heading, paragraph, list, field definition, code, table, equation, figure, API signature), and the Markdown is rendered from it, never from raw HTML. The model is not persisted; a build re-parses.
+- **Plain Markdown** (ticket 26): source text that Markdown would read as HTML, emphasis or a link, such as `<Curve item name>` or `j*b`, is escaped outside code. TeX stays as written. Underscores and dollars are escaped only in a line that holds a pair a viewer would read as emphasis or math (`__init__`, `[Left$](…) and [Mid$](…)`), so that most names, such as `_cst_eda_interface` or `Dir$`, grep as written. Every page renders without lost text or broken links in a CommonMark renderer with GitHub tables and dollar math.
 - **RoboHelp reader** (classic WebHelp 5.x):
   - **Navigation data:** reads the table of contents, keyword index and context-help maps from `gXMLBuffer` JS strings by decoding the string escapes, never by running JS. Breadcrumbs come from `addTocInfo`.
   - **Content:** the content runs between the logo header and the footer. A per-project map from CSS class to block role identifies VBA object, category and method headings, dialog fields, code lines and notes. Class names are matched without regard to case, and multi-name headings ("A / B") are split.

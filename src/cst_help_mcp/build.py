@@ -442,7 +442,7 @@ def _write_tree(tree: Path, docs: list[Document], files: ReleaseFiles) -> None:
             shutil.copyfile(original, tree / doc.original)
         for path in _copies(doc):
             (tree / path).parent.mkdir(parents=True, exist_ok=True)
-            (tree / path).write_text(render_markdown(doc, copy=True), encoding="utf-8", newline="\n")
+            (tree / path).write_text(render_markdown(doc, at=path), encoding="utf-8", newline="\n")
 
 
 def _copies(doc: Document) -> list[str]:

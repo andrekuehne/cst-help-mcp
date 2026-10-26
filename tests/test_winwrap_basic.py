@@ -20,8 +20,8 @@ def test_a_language_page_has_its_syntax_group_and_description_as_blocks(winwrap_
     assert '\narea: "winwrap-basic"\n' in md
     assert (
         '<a id="dir"></a>\n# Dir$ Function\n\n```vba\nDir[$]([Pattern$][, AttribMask])\n```\n\n'
-        "**Group**\n: [File](sax_basic/ww_00309.htm.md)\n\n"
-        "Scan a directory for the first file matching [Pattern$](sax_basic/ww_00288.htm.md).\n"
+        "**Group**\n: [File](ww_00309.htm.md)\n\n"
+        "Scan a directory for the first file matching [Pattern$](ww_00288.htm.md).\n"
     ) in md
 
 
@@ -85,4 +85,4 @@ def test_signatures_that_look_like_links_leave_the_knowledge_base_valid(winwrap_
 
 def test_a_line_that_starts_with_a_list_marker_stays_a_paragraph(winwrap_kb: Path) -> None:
     # The unary minus of the operator table, not a bullet.
-    assert "\n\\- [n1](sax_basic/ww_00278.htm.md) Negate" in _md(winwrap_kb, "sax_basic/ww_00179.htm.md")
+    assert "\n\\- [n1](ww_00278.htm.md) Negate" in _md(winwrap_kb, "sax_basic/ww_00179.htm.md")

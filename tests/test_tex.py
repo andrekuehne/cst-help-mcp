@@ -104,9 +104,11 @@ def test_inline_math_is_markdown_math_with_its_tex_as_written(tmp_path: Path) ->
 
 
 def test_a_dollar_on_a_page_without_mathjax_is_text(tmp_path: Path) -> None:
-    md = _build(tmp_path, "<p>Left$(s, 1) and Right$(s, 2) return $x$ parts.</p>", head="")
+    md = _build(tmp_path, "<p>Left$(s, 1) and Right$(s, 2) return $x$ parts.</p><p>Dir$ scans.</p>", head="")
 
-    assert "\n\nLeft$(s, 1) and Right$(s, 2) return $x$ parts.\n" in md
+    # Dollars that a viewer reading math would pair are escaped (ticket 26); a lone one stays as it is.
+    assert "\n\nLeft\\$(s, 1) and Right\\$(s, 2) return \\$x\\$ parts.\n" in md
+    assert "\n\nDir$ scans.\n" in md
 
 
 def test_each_page_honours_its_own_delimiters_and_the_classes_it_processes(tmp_path: Path) -> None:
@@ -124,7 +126,8 @@ def test_each_page_honours_its_own_delimiters_and_the_classes_it_processes(tmp_p
 
     # A dollar outside math is escaped, so that a Markdown renderer does not pair it either.
     assert r"Files are named \$\$MONITOR_NAME\$\$_\$\$EXCITATION_NAME\$\$." in md
-    assert "\n\nSources $i$ and \\(j\\), and\n\n$$\nZ\n$$\n\n.\n" in md
+    # \( is text here, and its backslash is escaped, so that a Markdown viewer shows it.
+    assert "\n\nSources $i$ and \\\\(j\\\\), and\n\n$$\nZ\n$$\n\n.\n" in md
 
 
 def test_an_escaped_dollar_opens_no_math(tmp_path: Path) -> None:

@@ -171,3 +171,16 @@ def test_materials_md_links_resolve_and_a_missing_materials_md_is_reported(
 
     assert code == 1
     assert "cst-2024/materials.md is missing; run cst-help assemble to restore it" in out
+
+
+def test_a_guide_links_relative_to_itself(kb: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    guide = kb / "cst-2024" / "guides" / "solvers.md"
+    guide.write_text(f"# Solvers\n\nSee [the HF Solver](../{SOLVER_HF}#solver).\n", encoding="utf-8")
+    assert _validate(kb, capsys)[0] == 0
+
+    # A Locator written as it is, without the way up from guides/, leads nowhere.
+    guide.write_text(f"# Solvers\n\nSee [the HF Solver]({SOLVER_HF}).\n", encoding="utf-8")
+    code, out = _validate(kb, capsys)
+
+    assert code == 1
+    assert f"cst-2024/guides/solvers.md links to guides/{SOLVER_HF}, which is missing" in out

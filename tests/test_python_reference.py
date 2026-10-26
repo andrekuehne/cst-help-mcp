@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from kb_helpers import ProseBuild
 
 from cst_help_mcp.validate import validate
@@ -89,12 +91,12 @@ def test_every_inventory_object_is_an_api_entry_under_its_dotted_name(python_bui
 
 
 def test_links_between_the_sphinx_pages_and_the_robohelp_help_resolve(python_build: ProseBuild) -> None:
-    assert "[New and Recent](userinterface/elements/backstage.htm.md#The_New_and_Recent_tab)" in _md(
+    assert "[New and Recent](../../userinterface/elements/backstage.htm.md#The_New_and_Recent_tab)" in _md(
         python_build, RESULTS
     )
     overview = _md(python_build, "python/python_overview.htm.md")
     assert '\narea: "python"\n' in overview
-    assert "[CST Python Libraries](python/main.html.md)" in overview
+    assert "[CST Python Libraries](main.html.md)" in overview
     assert python_build.report["counts"]["unresolved_links"] == 0
     assert python_build.report["counts"]["missing_anchors"] == 0
 
@@ -108,18 +110,22 @@ def test_the_python_menu_topics_at_the_help_root_belong_to_python(python_build: 
 def test_the_python_menu_topics_are_copied_into_python_so_a_grep_there_finds_them(
     python_build: ProseBuild,
 ) -> None:
+    copies = []
     for locator in ("menu.htm.md", "user_scipts.htm.md"):
         original = _md(python_build, locator)
-        copy = _md(python_build, f"python/{locator}")
-        # The copy says which Locator to cite; otherwise it is the page as written at the top.
-        assert copy == original.replace("\n---\n", f'\ncopy_of: "{locator}"\n---\n', 1)
+        copies.append(_md(python_build, f"python/{locator}"))
+        # The copy says which Locator to cite; otherwise it is the page as written at the top, with
+        # its links leading up out of python/.
+        expected = original.replace("\n---\n", f'\ncopy_of: "{locator}"\n---\n', 1)
+        assert copies[-1] == re.sub(r"\]\((?![a-z]+:)", "](../", expected)
+    assert any("](../" in copy for copy in copies)
     agents = (python_build.tree / "AGENTS.md").read_text(encoding="utf-8")
     assert "| `python/` | 9 |" in agents  # copies are no Documents of their own
 
 
 def test_figures_sized_in_millimetres_become_assets(python_build: ProseBuild) -> None:
     assert python_build.report["counts"]["missing_assets"] == 0
-    assert "![FMCW RADAR Model](assets/" in _md(python_build, "python/source/cst.radar.html.md")
+    assert "![FMCW RADAR Model](../../assets/" in _md(python_build, "python/source/cst.radar.html.md")
 
 
 def test_the_python_area_leaves_the_knowledge_base_valid(python_build: ProseBuild) -> None:

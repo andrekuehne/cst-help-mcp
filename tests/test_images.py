@@ -26,7 +26,7 @@ def test_a_figure_is_a_png_asset_that_its_section_shows(prose_build: ProseBuild)
     assert (dims["width"], dims["height"]) == (294, 150)
     assert dims["documents"] == [WAVEGUIDE]
     section = md.partition('<a id="Port_Modes_Microstrips"></a>')[2].partition("<a id=")[0]
-    assert f"]({dims['file']})" in section
+    assert f"](../../{dims['file']})" in section
     with Image.open(prose_build.tree / dims["file"]) as image:
         assert (image.format, image.size) == ("PNG", (294, 150))
 
@@ -35,8 +35,10 @@ def test_the_markdown_shows_figures_and_icons_and_leaves_out_logos(prose_build: 
     md = (prose_build.tree / WHICH_SOLVER).read_text(encoding="utf-8")
     [chart] = [a for a in _assets(prose_build) if a["sources"][0].endswith("/which_solver.png")]
 
-    assert f"\n![]({chart['file']})\n" in md
-    assert re.search(r"\*\*Time Domain Solver !\[solver transient icon\]\(assets/[0-9a-f]{12}\.png\)\*\*", md)
+    assert f"\n![](../../{chart['file']})\n" in md
+    assert re.search(
+        r"\*\*Time Domain Solver !\[solver transient icon\]\(\.\./\.\./assets/[0-9a-f]{12}\.png\)\*\*", md
+    )
     assert (prose_build.tree / chart["file"]).is_file()
     assert chart["documents"] == [WHICH_SOLVER]
     assert not any("ds_simulia" in s or "3ds.png" in s for a in _assets(prose_build) for s in a["sources"])
@@ -44,7 +46,7 @@ def test_the_markdown_shows_figures_and_icons_and_leaves_out_logos(prose_build: 
 
 def test_equation_images_are_marked_as_not_transcribed(prose_build: ProseBuild) -> None:
     md = (prose_build.tree / UNITS).read_text(encoding="utf-8")
-    files = re.findall(r"\n!\[equation image, not transcribed\]\((assets/\w+\.png)\)\n", md)
+    files = re.findall(r"\n!\[equation image, not transcribed\]\(\.\./\.\./(assets/\w+\.png)\)\n", md)
 
     assert files
     assert {a["kind"] for a in _assets(prose_build) if a["file"] in files} == {"equation"}
@@ -94,7 +96,7 @@ def test_svg_and_oversized_images_become_png_with_a_copy_within_the_client_limit
     md = (view / "vba_3d/widgets/widget.htm.md").read_text(encoding="utf-8")
     curve, scaled = json.loads((result.report_path.parent / "assets.json").read_text("utf-8"))
     assert (curve["caption"], curve["width"], curve["height"]) == ("Return loss curve", 120, 60)
-    assert f"![Return loss curve]({curve['file']})" in md
+    assert f"![Return loss curve](../../{curve['file']})" in md
     with Image.open(view / curve["file"]) as image:
         assert image.format == "PNG"
     assert (scaled["served_width"], scaled["served_height"]) == (1_568, 392)
@@ -126,9 +128,9 @@ def test_an_icon_inside_a_link_with_text_is_kept_and_a_small_formula_is_an_equat
     build_collection(write_config(tmp_path / "cst-help.toml", tmp_path / "kb", release, []), "cst-2024")
 
     md = (tmp_path / "kb" / "cst-2024" / "vba_3d/widgets/widget.htm.md").read_text(encoding="utf-8")
-    assert "[Spin](https://example.com/spin) ![spin icon](assets/" in md
+    assert "[Spin](https://example.com/spin) ![spin icon](../../assets/" in md
     # An inline symbol named like a formula is an equation image, however small.
-    assert " at ![equation image, not transcribed](assets/" in md
+    assert " at ![equation image, not transcribed](../../assets/" in md
 
 
 def _assets(build: ProseBuild) -> list[dict[str, Any]]:
