@@ -136,6 +136,6 @@ Per half: tuning 19 of 20, median 3; held-out 19 of 20, median 3. By category: e
 
 The misses:
 - FIG-02 took the manual route of the concept recipe (step 5). It answered from the High Frequency manual, pages 68–69, which has its own solver-choice diagrams. It never opened the expected help page, `special_overview_whichsolver.htm`. The manual was in the slice before, so this is the agent's choice of route, not a change from ticket 21.
-- LIB-02, which asks for the farfield-source Result Template, grepped `keywords.md`, `api.md`, `3d/` and `vba_3d/`. It never opened `library.md` or `library/`. A Library question first runs here with all Areas built. Nothing in ticket 21 touches the Library recipe.
+- LIB-02, which asks for the farfield-source Result Template, grepped `keywords.md`, `api.md`, `3d/` and `vba_3d/`. It never opened `library.md` or `library/`. It answered from the help instead: the Field Monitor's "Export farfield source" option (`Monitor.ExportFarfieldSource`) for the automatic export, and `FarfieldPlot.ASCIIExportAsSource` for a manual one. That answer is sound, but it never names the Result Template. In ticket 17's run, LIB-02 hit at call 7. Nothing in ticket 21 touches the Library recipe, so this is the agent's choice of route.
 
 The run also flagged "call 1 was not the AGENTS.md read" on every question. Claude Code loads `CLAUDE.md`, which includes `AGENTS.md`, so the agents no longer read it with a tool call.
