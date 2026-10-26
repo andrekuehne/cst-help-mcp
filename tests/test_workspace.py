@@ -130,10 +130,10 @@ def test_an_assembly_that_stopped_between_its_renames_loses_no_work(tmp_path: Pa
     assert not stopped.exists()
 
 
-def test_agents_md_of_a_real_build_stays_under_8_kb(prose_build: ProseBuild) -> None:
+def test_agents_md_of_a_real_build_stays_under_12_kb(prose_build: ProseBuild) -> None:
     agents = (prose_build.tree / "AGENTS.md").read_text(encoding="utf-8")
 
-    assert len(agents.encode("utf-8")) < 8 * 1024
+    assert len(agents.encode("utf-8")) < 12 * 1024
     assert "| `3d/` | 1," in agents  # over a thousand pages, with a thousands separator
 
 

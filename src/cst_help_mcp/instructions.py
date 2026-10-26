@@ -74,11 +74,11 @@ FOLDERS = {
         "`cst.units`), one page per package, and its overview"
     ),
     "manuals": (
-        "Word manuals (Getting Started: installation, licensing; High Frequency "
+        "Word manuals (Getting Started: installation, licensing, first steps; High Frequency "
         "Simulation: workflow and solver choice), each a PDF with a `.pdf.md` text companion"
     ),
     TREE_FOLDER: "CST's Library: VBA Macros, Result Templates and Includes; Python apps",
-    ".": "Python menu topics (CST Apps, user scripts), also copied into `python/`",
+    ".": "Python menu topics (CST Apps, user scripts), at the top of the folder and copied into `python/`",
 }
 
 # What each entry file at the root of a Release folder holds.
@@ -104,17 +104,17 @@ ANATOMY = """\
   reached in the CST ribbon. Dialog fields are bold lines with a `: ` definition under them.
 - VBA pages under `vba_3d/`: one page per object, `## General Methods` and similar groups, then
   `### MethodName` with a ```vba signature block and the description.
-  `special_vba<topic>/..._object.htm.md` is one VBA object
-  (`special_vbasolver/special_vbasolver_solver_object.htm.md` is `Solver`), and `common_vbaapp/`
-  holds the application-level objects.
+  `special_vba<topic>/..._object.htm.md` is one VBA object (for example
+  `special_vbasolver/special_vbasolver_solver_object.htm.md` is the `Solver` object), and
+  `common_vbaapp/` holds the application-level objects.
 - WinWrap Basic pages under `sax_basic/`: file names are numbers (`ww_00069.htm.md`), so find a
   keyword by its title, `^title: "Dir\\$ Function`, or in `api.md`. Each has the syntax in a
-  ```vba block, then `## Parameter Description` and `## Example`. `ww_00003.htm.md` lists the
-  keywords by group. The operators (`Mod`, `And`, `Xor`, `^`) share one page, `ww_00179.htm.md`,
-  and are not in `api.md`.
-- Python pages under `python/source/`: one page per package (`cst.results.html.md`), each name
-  under a heading with its dotted name and a ```python signature block, then its description and
-  `**Parameters**`. `python/main.html.md` covers setup.
+  ```vba block, its `**Group**`, the description, `## Parameter Description` and `## Example`.
+  `ww_00003.htm.md` lists the keywords by group. The operators (`Mod`, `And`, `Xor`, `^`) share
+  one page, `ww_00179.htm.md`, and are not in `api.md`.
+- Python pages under `python/source/`: one page per package (`cst.results.html.md`), each class,
+  method, property and function under a heading with its dotted name and a ```python signature
+  block, then its description and `**Parameters**`. `python/main.html.md` covers setup.
 - Folder names in `3d/` say what a page is: `special_solvopt_*` solver and setup dialogs,
   `special_overview_*` overviews, `special_theory_*` theory, `special_postpr_*` post-processing,
   `special_process_*` parameter sweeps and optimisation, `common_*` shared across products."""
@@ -138,22 +138,25 @@ for it; a name's last parts are enough (`ResultModule.get_run_ids`).
    synonyms; "Transient Solver Parameters" points at the time domain solver dialog.
 2. Grep `toc.md` the same way to see the neighbourhood of pages.
 3. Grep titles: `^title:.*discrete port` across `3d/`.
-4. Only then grep bodies, with the two or three most specific words, listing files only, and narrow
-   by a second word.
-5. For a choice (which port or solver), also grep `manuals/`: the
-   manuals compare the options, the help describes each alone.
+4. Only then grep bodies, with the two or three most specific words, listing files only (no
+   context lines), and narrow by a second word.
+5. For a choice (which port or solver, when one is good enough), also grep `manuals/`: the
+   manuals weigh the options against each other, the help describes each alone.
 Prefer pages whose title or Ribbon Path matches over pages that merely mention the words. Read the
 one or two most likely pages. The defining page is usually the dialog (`special_solvopt_*`) for
 settings, the overview (`special_overview_*`) for concepts.
 
+**Where a setting lives in the UI**: the Ribbon Path line of the dialog page.
+
 **Which VBA call does what a dialog does**: find the dialog page in `3d/`, then grep the dialog's
-title words in `vba_3d/` titles; dialog and object usually share a name (Port and `Port Object`).
+title words in `vba_3d/` titles; dialog and object usually share a name (Solver Parameters and
+`Solver Object`, Port and `Port Object`).
 
 **A manual** (installation, the workflow of a solver, choosing between solvers or ports): grep the
 text companions in `manuals/`, the `.pdf.md` files, which hold each page's text under a
 `## page-<n>` heading. A hit's page is the nearest such heading above its line; grep with line
-numbers to find both. Read that section; open the PDF at that page when a table or figure
-matters. Cite the PDF and its page.
+numbers to find both. Read that page's section, then open the PDF beside it at that page with
+your read tool when the layout, a table or a figure matters. Cite the PDF and its page.
 
 **Theory and equations**: `special_overview_*` and `special_theory_*` pages in `3d/`. TeX is inline
 as `$…$` or `\\begin{equation}`; where an equation is an image, open it.
@@ -198,8 +201,9 @@ def rules(folders: list[ReleaseFolder]) -> str:
   but no page documents) to find."""
     return f"""\
 - **Grep finds pages; it never answers.** Before you answer, open every page you cite with your
-  read tool, even when the grep lines seem to hold the answer. A snippet leaves out the
-  conditions, figures and exceptions around it. Grep bodies with no context lines.
+  read tool, even when the grep lines already seem to hold the answer. A snippet leaves out the
+  conditions, figures and exceptions around it. Pages are short; most are under 10 KB. Grep
+  bodies with no context lines.
 - Cite the file path and the Release of every page you rely on.
 {documented}
 - Some answers are only in a figure. Open the image file with your read tool; equation images are
@@ -214,7 +218,7 @@ def agents_md(folder: ReleaseFolder) -> str:
 
 This folder is the CST Studio Suite help of Release {release}, converted to Markdown:
 {folder.pages.total():,} pages. Every page is the vendor's text; nothing but the Guides was written
-by a model. Use your own file tools: grep, glob, read. Paths are
+by a model. Use your own file tools: grep, glob, read. There is no search server. Paths are
 relative to this folder. Write what you make, such as macros and notes, into `{layout.WORK_DIR}/`.
 
 {_incompleteness([folder])}## Rules

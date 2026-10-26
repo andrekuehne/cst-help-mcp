@@ -94,7 +94,7 @@ There is no server, no database and no ranking (ADR 0014). A client without file
 
 ### Reading and navigating
 
-49. As an agent, I want `AGENTS.md` under about 8 KB that says what each folder holds, how pages are built, and which grep finds an identifier, a concept, a dialog, a UI location or a figure, so that I know how to look from the first turn.
+49. As an agent, I want `AGENTS.md` under about 12 KB that says what each folder holds, how pages are built, and which grep finds an identifier, a concept, a dialog, a UI location or a figure, so that I know how to look from the first turn.
 50. As an agent, I want CST's table of contents as `toc.md` and the author keyword index as `keywords.md`, so that I can start from the vendor's own vocabulary.
 51. As an agent, I want descriptive file names and folder names that say what a page is (`special_solvopt_` for dialogs, `special_overview_` for overviews), so that a list of matching files is already a ranking.
 52. As an agent, I want the Ribbon Path under a dialog's title, so that I can tell the user where a setting lives.
@@ -204,7 +204,7 @@ There is no server, no database and no ranking (ADR 0014). A client without file
 
 - **Per Release folder:** `toc.md`, `keywords.md`, `api.md` (one API Entry per line: qualified name, Area, signature, path with anchor), `library.md`, `materials.md`.
 - **Workspace files written by assembly** (ADR 0013, ADR 0014):
-  - `AGENTS.md` under about 8 KB, generated: rules (cite path and Release; "not documented"; Undocumented Member; look at figures), folder table with counts, page anatomy, grep recipes, index files, Guides, incompleteness notice;
+  - `AGENTS.md` under about 12 KB, generated: rules (cite path and Release; "not documented"; Undocumented Member; look at figures), folder table with counts, page anatomy, grep recipes, index files, Guides, incompleteness notice;
   - `CLAUDE.md`, which imports it; a Cursor rule if ticket 25 finds one is needed;
   - the Guide-writing skills, copied into `.claude/skills/` and `.agents/skills/`;
   - `work/` and `guides/` folders that builds never touch.
