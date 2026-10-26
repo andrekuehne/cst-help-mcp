@@ -103,10 +103,12 @@ def _check_view(kb_path: Path, view: Path, tree: Path, files: dict[str, str]) ->
 
 def _check_entry_files(kb_path: Path, view: Path, build: Path) -> list[str]:
     """Every navigation tree the Build found has its entry file in the view, and so have its Library
-    code and Material Definitions."""
+    code, its Material Definitions and a release-independent Build's Documents."""
     trees = layout.read_navigation(build)
     names = [name for tree, (name, _) in layout.ENTRY_FILES.items() if tree in trees]
     names += layout.library_entry_files(layout.read_library_lines(build))
+    if layout.read_document_lines(build) is not None:
+        names.append(layout.DOCUMENTS_ENTRY_FILE)
     return [
         f"{_shown(kb_path, view / name)} is missing; run cst-help assemble to restore it"
         for name in names

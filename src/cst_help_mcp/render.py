@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 
-from cst_help_mcp.layout import MATERIAL_KIND, ApiLine, LibraryLine
+from cst_help_mcp.layout import MATERIAL_KIND, ApiLine, DocumentLine, LibraryLine
 
 # The start of a line that Markdown reads as a block: a bullet, a heading or a quote, or the number
 # of an ordered list item, whose "." or ")" is what gets escaped.
@@ -80,12 +80,11 @@ def render_markdown(doc: Document, at: str = "") -> str:
 def render_parts(doc: Document, at: str = "") -> list[Part]:
     at = at or doc.locator
     base = posixpath.dirname(at)
-    front: dict[str, object] = {
-        "release": doc.release,
-        "area": doc.area,
-        "title": doc.title,
-        "source": doc.source_path,
-    }
+    # A release-independent Document has no Release; it states the CST version it was written for.
+    front: dict[str, object] = {"release": doc.release} if doc.release else {}
+    if doc.cst_version:
+        front["cst_version"] = doc.cst_version
+    front |= {"area": doc.area, "title": doc.title, "source": doc.source_path}
     if doc.pages:
         front["pages"] = doc.pages
     for key, values in (
@@ -225,6 +224,17 @@ def render_materials(release: str, lines: list[LibraryLine]) -> str:
             _text(line.description),
         ]
         out.append(_row(cells))
+    return "\n".join(out) + "\n"
+
+
+def render_documents(title: str, lines: list[DocumentLine]) -> str:
+    """The entry file documents.md of a release-independent Collection: one PDF per line, linking
+    its Text Companion and the PDF, with its pages and the CST version it was written for."""
+    out = [*_frontmatter({"title": title}), f"# {title}", ""]
+    for line in sorted(lines, key=lambda line: line.locator.lower()):
+        version = f"written for CST {line.cst_version}" if line.cst_version else "CST version unknown"
+        pages = f"{line.pages} page{'s' if line.pages != 1 else ''}"
+        out.append(f"- {_link(line.title, line.locator)} ({_link('PDF', line.original)}), {pages}, {version}")
     return "\n".join(out) + "\n"
 
 

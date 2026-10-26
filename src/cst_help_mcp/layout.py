@@ -1,11 +1,13 @@
 """Where a Knowledge Base keeps its Builds, assemblies and the active pointer (ADR 0009).
 
     <kb>/builds/<collection>/<build id>/   one immutable Build: build.json, report.json, navigation.json,
-                                           api.json, library.json, assets.json, tree/
+                                           api.json, library.json, assets.json, tree/; or, for a
+                                           release-independent Collection, documents.json
     <kb>/assemblies/<assembly id>/         one assembly: assembly.json, naming the Build of each Collection
     <kb>/active.json                       the pointer to the active assembly, replaced atomically
     <kb>/<collection>/                     the readable view: the active Build's tree, the entry files
                                            and the workspace files and folders
+    <kb>/AGENTS.md, CLAUDE.md              the Releases and the release-independent Collections
 
 Builds and assemblies are written under a dot-prefixed name and renamed into place once
 finished, so a folder under its final name is always whole. A Build's files are then made
@@ -56,6 +58,9 @@ LIBRARY_ENTRY_FILE = "library.md"
 # The kind of a Library file that materials.md lists instead of library.md.
 MATERIAL_KIND = "Material Definition"
 MATERIALS_ENTRY_FILE = "materials.md"
+# The Documents of a release-independent Collection, beside its tree, and the entry file that lists them.
+DOCUMENTS_FILE = "documents.json"
+DOCUMENTS_ENTRY_FILE = "documents.md"
 # The workspace files that assembly writes at the root of a readable view (ADR 0013).
 AGENTS_FILE = "AGENTS.md"
 CLAUDE_FILE = "CLAUDE.md"
@@ -285,6 +290,28 @@ def read_library_lines(build: Path) -> list[LibraryLine]:
     """The Library files a Build lists; none for a Build without a Library."""
     library_file = build / LIBRARY_FILE
     return [LibraryLine(**line) for line in read_json(library_file)] if library_file.is_file() else []
+
+
+@dataclass(frozen=True)
+class DocumentLine:
+    """One Document of a release-independent Collection as documents.md lists it."""
+
+    locator: str  # its Text Companion
+    original: str  # the PDF beside it
+    title: str
+    pages: int
+    cst_version: str  # the CST version it was written for, or "" when unknown
+
+
+def write_document_lines(build: Path, lines: list[DocumentLine]) -> None:
+    """Write the Documents of a release-independent Build beside its tree, for documents.md."""
+    write_json(build / DOCUMENTS_FILE, [asdict(line) for line in lines])
+
+
+def read_document_lines(build: Path) -> list[DocumentLine] | None:
+    """The Documents a release-independent Build lists; None for a Release's Build."""
+    documents_file = build / DOCUMENTS_FILE
+    return [DocumentLine(**line) for line in read_json(documents_file)] if documents_file.is_file() else None
 
 
 def library_entry_files(lines: list[LibraryLine]) -> list[str]:

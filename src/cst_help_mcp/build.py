@@ -15,7 +15,7 @@ from typing import Any, get_args
 from cst_help_mcp import layout
 from cst_help_mcp.assembly import assemble
 from cst_help_mcp.assets import write_assets
-from cst_help_mcp.config import CollectionConfig, SourceConfig, load_config
+from cst_help_mcp.config import PDF_FOLDER, CollectionConfig, SourceConfig, load_config
 from cst_help_mcp.errors import BuildError
 from cst_help_mcp.library import Library, read_library, write_library
 from cst_help_mcp.links import Inventory, LinkReport, ReleaseFiles, SourceLink, resolve_links
@@ -28,7 +28,7 @@ from cst_help_mcp.navigation import (
     read_navigation,
     resolve_navigation,
 )
-from cst_help_mcp.pdf import read_manual
+from cst_help_mcp.pdf import read_manual, written_for
 from cst_help_mcp.render import render_markdown
 from cst_help_mcp.robohelp import PROSE, VBA, is_topic, read_topic
 from cst_help_mcp.sphinx import read_inventory, read_sphinx_page
@@ -116,6 +116,9 @@ _CST_RELEASE_PROJECTS = (
 # out with their online help.
 _MANUALS_FOLDER = "Documentation"
 _LEFT_OUT_MANUALS = ("*FEST3D*", "*SPARK3D*", "*IdEM*")
+
+# The Area of a release-independent Collection's PDFs.
+_PDFS_AREA = "pdfs"
 
 _IMAGE_SUFFIXES = frozenset((".png", ".gif", ".jpg", ".jpeg", ".bmp", ".svg", ".ico"))
 
@@ -227,10 +230,13 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
     docs: list[Document] = []
     library = Library()
     for source in collection.sources:
+        if source.type == PDF_FOLDER:
+            docs.extend(_read_pdf_folder(collection, source, report))
+            continue
         found = _read_library(source, library, report)
         docs.extend(_read_source(collection, source, report, library_found=found))
     _check_locators(docs)
-    release_folders = [source.path for source in collection.sources]
+    release_folders = [source.path for source in collection.sources if source.type != PDF_FOLDER]
     navigation = read_navigation(release_folders)
     apply_navigation(docs, navigation)
     unmerged = len(docs)
@@ -247,7 +253,7 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
         raise BuildError(f"{report.failed} Documents failed to build, and --strict is set: {_listed(report)}")
     report.api_entries = sum(len(d.api_entries) for d in docs)
     inventory = Inventory(docs)
-    files = ReleaseFiles(release_folders)
+    files = ReleaseFiles([source.path for source in collection.sources])
     report.links = resolve_links(docs, inventory, files)
     report.navigation = resolve_navigation(navigation, inventory)
     build_id = layout.new_id()
@@ -260,15 +266,21 @@ def build_collection(config_path: Path, collection_name: str, *, strict: bool = 
         report.failures.extend(Failure(*f) for f in write_library(staging / layout.TREE, library))
         if library.files:
             layout.write_library_lines(staging, [file.line for file in library.files])
-        _write_navigation(staging, navigation)
-        layout.write_api_entries(
-            staging,
-            [
-                layout.ApiLine(e.qualified_name, doc.area, e.signature, doc.locator, e.anchor)
-                for doc in docs
-                for e in doc.api_entries
-            ],
-        )
+        if collection.release_independent:
+            layout.write_document_lines(
+                staging,
+                [layout.DocumentLine(d.locator, d.original, d.title, d.pages, d.cst_version) for d in docs],
+            )
+        else:
+            _write_navigation(staging, navigation)
+            layout.write_api_entries(
+                staging,
+                [
+                    layout.ApiLine(e.qualified_name, doc.area, e.signature, doc.locator, e.anchor)
+                    for doc in docs
+                    for e in doc.api_entries
+                ],
+            )
         layout.write_json(staging / layout.REPORT_FILE, report.to_dict())
         manifest = layout.BuildManifest(
             collection=collection.name,
@@ -378,6 +390,38 @@ def _read_source(
     if not found:
         raise BuildError(
             f"No topics found for collection '{collection.name}' in {source.path} "
+            "with the configured include and exclude filters"
+        )
+
+
+def _read_pdf_folder(
+    collection: CollectionConfig, source: SourceConfig, report: BuildReport
+) -> Iterator[Document]:
+    """The PDFs of a release-independent folder, below it at any depth, as Documents with Text
+    Companions, each stating the CST version it was written for where it names one."""
+    found = False
+    for file in sorted(p for p in source.path.rglob("*") if p.is_file()):
+        rel = file.relative_to(source.path).as_posix()
+        if not _selected(rel, source):
+            continue
+        if file.suffix.lower() != ".pdf":
+            report.unsupported[file.suffix.lower()] += 1
+            continue
+        report.discovered += 1
+        found = True
+        try:
+            doc = read_manual(
+                file, source_path=rel, locator=f"{rel}.md", area=_PDFS_AREA, release=collection.release
+            )
+        except Exception as e:  # noqa: BLE001
+            report.failures.append(Failure(rel, f"{type(e).__name__}: {e}"))
+            continue
+        doc.cst_version = written_for(doc)
+        report.converted += 1
+        yield doc
+    if not found:
+        raise BuildError(
+            f"No PDFs found for collection '{collection.name}' in {source.path} "
             "with the configured include and exclude filters"
         )
 

@@ -2,6 +2,8 @@
 
 **Confirmed by ADR 0014.** The workspace is the product. There is no MCP configuration to write. The workspace files are written into each Release folder, not the Knowledge Base root, since a session works in one Release (ADR 0005 as amended), and a `guides/` folder sits beside `work/` (ADR 0010).
 
+**Amended 2026-10-26 (ticket 23).** The Knowledge Base root also gets a short `AGENTS.md`, with `CLAUDE.md` importing it. It is not a workspace: it lists the Release folders and the release-independent Collections beside them, and tells a session to open one Release and stay in it.
+
 **Amended 2026-10-26.** The `AGENTS.md` budget is about 12 KB, up from 8 KB. With the Library's recipes, the full Release reached the old limit, and staying under it meant cutting recipe lines the benchmark runs had relied on. Ticket 30 plans a short skeleton `AGENTS.md` with the detailed instructions in skills that the user invokes. That leaves the finding below untouched, since no agent has to decide to load a skill. A plain question with no skill invoked must still be answerable from the skeleton, and the agent run checks both cases before the skeleton replaces this layout.
 
 Users should be able to start a "help session" by opening Claude Code, Cursor or Codex directly in the Knowledge Base folder. Every assembly therefore writes, at the Knowledge Base root:

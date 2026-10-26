@@ -43,6 +43,13 @@ def _parser() -> argparse.ArgumentParser:
     assemble.add_argument("--kb", type=Path, required=True, help="the Knowledge Base folder")
     assemble.set_defaults(run=_assemble)
 
+    remove = commands.add_parser(
+        "remove", help="remove a Collection, such as an old Release, with its folder and Builds"
+    )
+    remove.add_argument("collection")
+    remove.add_argument("--kb", type=Path, required=True, help="the Knowledge Base folder")
+    remove.set_defaults(run=_remove)
+
     validate = commands.add_parser("validate", help="check the integrity of a Knowledge Base")
     validate.add_argument("--kb", type=Path, required=True, help="the Knowledge Base folder")
     validate.set_defaults(run=_validate)
@@ -92,6 +99,16 @@ def _assemble(args: argparse.Namespace) -> int:
     return 0
 
 
+def _remove(args: argparse.Namespace) -> int:
+    from cst_help_mcp.assembly import remove
+
+    assembly = remove(args.kb, args.collection)
+    print(f"Removed {args.collection}, its folder and its Builds")
+    for collection, build in assembly.builds.items():
+        print(f"Assembled {collection} (Build {build})")
+    return 0
+
+
 def _validate(args: argparse.Namespace) -> int:
     from cst_help_mcp.validate import validate
 
@@ -109,18 +126,19 @@ def _validate(args: argparse.Namespace) -> int:
 
 
 def _instructions(args: argparse.Namespace) -> int:
-    from cst_help_mcp.instructions import agents_section, release_folders
+    from cst_help_mcp.instructions import agents_section, independent_folders, release_folders
 
     folders = release_folders(args.kb.resolve(), args.release)
+    beside = independent_folders(args.kb.resolve())
     print(f"The Knowledge Base of Release {folders[0].release}:")
-    for folder in folders:
+    for folder in [*folders, *beside]:
         print(f"  {folder.path}")
     print()
     print("Add this section to the project's AGENTS.md:")
     print()
     print("## CST help")
     print()
-    print(agents_section(folders), end="")
+    print(agents_section(folders, beside), end="")
     return 0
 
 

@@ -278,6 +278,8 @@ class Document:
     # such as a manual's PDF; and its number of pages.
     original: str = ""
     pages: int = 0
+    # The CST version a release-independent Document was written for, where it is known.
+    cst_version: str = ""
     generated: bool = False  # written in an agent session, such as a Guide (ADR 0010)
     heuristic: bool = False  # found by the build's heuristics, such as Usages (ADR 0012)
 

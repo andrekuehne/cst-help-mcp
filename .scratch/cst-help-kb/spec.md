@@ -141,7 +141,7 @@ There is no server, no database and no ranking (ADR 0014). A client without file
   - `pdf-folder`: release-independent PDFs.
 
   Every Source accepts include and exclude filters, so a Release can be built in parts.
-- **CLI commands:** `cst-help build <collection>`, `assemble`, `validate` and `instructions`. The Knowledge Base path is always explicit.
+- **CLI commands:** `cst-help build <collection>`, `assemble`, `remove <collection>`, `validate` and `instructions`. The Knowledge Base path is always explicit.
 
 ### Collections, Releases and Areas
 

@@ -48,6 +48,23 @@ def read_manual(pdf: Path, *, source_path: str, locator: str, area: str, release
     )
 
 
+# "CST Studio Suite 2023", "CST STUDIO SUITE® 2019", "CST 2022": the version a PDF was written for.
+_CST_VERSION = re.compile(r"\bCST(?:\s+Studio\s+Suite)?\s*®?\s+(20\d\d)\b", re.IGNORECASE)
+# The lines of the first page that may name it, as a title page does; the body text further on may
+# mention other versions ("unlike CST 2019") and is not read.
+_VERSION_LINES = 5
+
+
+def written_for(doc: Document) -> str:
+    """The CST version a PDF names in its file name, its title or the head of its first page; ""
+    when unknown."""
+    head = [b.text for b in doc.sections[0].blocks[1 : 1 + _VERSION_LINES]] if doc.sections else []
+    for text in (doc.source_path.rpartition("/")[2], doc.title, *head):
+        if match := _CST_VERSION.search(text):
+            return match.group(1)
+    return ""
+
+
 def _escaped(text: str) -> str:
     """Text with each dollar escaped, so that a Markdown renderer doesn't take it for math; and each
     ``<`` that could open a tag."""

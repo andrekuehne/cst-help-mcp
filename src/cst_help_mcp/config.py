@@ -10,7 +10,9 @@ from typing import Any
 
 from cst_help_mcp.errors import ConfigError
 
-SOURCE_TYPES = ("cst-release",)
+SOURCE_TYPES = ("cst-release", "pdf-folder")
+# The Source type that makes a Collection release-independent.
+PDF_FOLDER = "pdf-folder"
 
 
 @dataclass(frozen=True)
@@ -24,8 +26,12 @@ class SourceConfig:
 @dataclass(frozen=True)
 class CollectionConfig:
     name: str
-    release: str
+    release: str  # "" for a release-independent Collection
     sources: list[SourceConfig]
+
+    @property
+    def release_independent(self) -> bool:
+        return not self.release
 
 
 @dataclass(frozen=True)
@@ -63,16 +69,25 @@ def load_config(path: Path) -> Config:
 
 
 def _collection(path: Path, base: Path, name: str, data: dict[str, Any]) -> CollectionConfig:
+    sources_data = data.get("sources", [])
+    if not sources_data:
+        raise ConfigError(f"{path}: collection '{name}' has no [[collections.{name}.sources]]")
+    sources = [_source(path, base, name, s) for s in sources_data]
     release = data.get("release")
+    pdf_folders = sum(source.type == PDF_FOLDER for source in sources)
+    if pdf_folders:
+        # A folder of PDFs is gathered apart from any Release, and sits beside every Release.
+        if pdf_folders < len(sources) or release is not None:
+            raise ConfigError(
+                f"{path}: collection '{name}' has a '{PDF_FOLDER}' Source, which makes it "
+                f"release-independent: it takes no 'release' and only '{PDF_FOLDER}' Sources"
+            )
+        return CollectionConfig(name=name, release="", sources=sources)
     if release is None:
         match = re.fullmatch(r"cst-(\d+)", name)
         if not match:
             raise ConfigError(f"{path}: collection '{name}' needs a 'release'")
         release = match.group(1)
-    sources_data = data.get("sources", [])
-    if not sources_data:
-        raise ConfigError(f"{path}: collection '{name}' has no [[collections.{name}.sources]]")
-    sources = [_source(path, base, name, s) for s in sources_data]
     return CollectionConfig(name=name, release=str(release), sources=sources)
 
 

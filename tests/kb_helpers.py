@@ -106,3 +106,68 @@ exclude = [{excludes}]
         encoding="utf-8",
     )
     return path
+
+
+def write_pdf(path: Path, pages: Sequence[str], title: str = "") -> Path:
+    """A minimal PDF with a text layer: one line of Helvetica text per page, and an optional title."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    objects = ["<< /Type /Catalog /Pages 2 0 R >>", ""]
+    font = 3
+    objects.append("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    kids = []
+    for text in pages:
+        escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        stream = f"BT /F1 12 Tf 72 720 Td ({escaped}) Tj ET"
+        objects.append(f"<< /Length {len(stream)} >>\nstream\n{stream}\nendstream")
+        content = len(objects)
+        objects.append(
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents {content} 0 R "
+            f"/Resources << /Font << /F1 {font} 0 R >> >> >>"
+        )
+        kids.append(f"{len(objects)} 0 R")
+    objects[1] = f"<< /Type /Pages /Kids [{' '.join(kids)}] /Count {len(kids)} >>"
+    info = 0
+    if title:
+        objects.append(f"<< /Title ({title}) >>")
+        info = len(objects)
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for n, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{n} 0 obj\n{body}\nendobj\n".encode("latin-1")
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    out += "".join(f"{offset:010d} 00000 n \n" for offset in offsets).encode()
+    trailer = f"/Size {len(objects) + 1} /Root 1 0 R" + (f" /Info {info} 0 R" if info else "")
+    out += f"trailer\n<< {trailer} >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    path.write_bytes(bytes(out))
+    return path
+
+
+def write_kb_config(path: Path, kb: Path, collections: str) -> Path:
+    """Write a configuration with the given ``[collections.<name>]`` tables, as TOML."""
+    path.write_text(f"[knowledge_base]\npath = '{kb}'\n\n{collections}", encoding="utf-8")
+    return path
+
+
+def release_collection(name: str, release: str, release_folder: Path) -> str:
+    """A ``[collections.<name>]`` table for a cst-release Source."""
+    return f"""
+[collections.{name}]
+release = "{release}"
+
+[[collections.{name}.sources]]
+type = "cst-release"
+path = '{release_folder}'
+"""
+
+
+def pdf_collection(name: str, folder: Path) -> str:
+    """A ``[collections.<name>]`` table for a release-independent pdf-folder Source."""
+    return f"""
+[collections.{name}]
+
+[[collections.{name}.sources]]
+type = "pdf-folder"
+path = '{folder}'
+"""

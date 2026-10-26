@@ -8,6 +8,7 @@ the benchmark from the folder alone (`.scratch/cst-help-kb/files-only-experiment
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,14 +35,30 @@ class ReleaseFolder:
         )
         return cls(manifest.collection, manifest.release, path, manifest.failed, pages)
 
+    @property
+    def release_independent(self) -> bool:
+        """Whether it is the folder of a release-independent Collection, beside every Release."""
+        return not self.release
 
-def release_folders(kb_path: Path, release: str | None = None) -> list[ReleaseFolder]:
-    """The folders of one Release, the newest by default."""
+
+def active_folders(kb_path: Path) -> list[ReleaseFolder]:
+    """The folder of every Collection the active assembly holds."""
     assembly = layout.assemblies_dir(kb_path) / layout.active_assembly(kb_path)
     folders = []
     for collection, build in layout.assembly_builds(assembly).items():
         manifest = layout.BuildManifest.read(layout.build_dir(kb_path, collection, build))
         folders.append(ReleaseFolder.of(manifest, (kb_path / collection).resolve()))
+    return folders
+
+
+def independent_folders(kb_path: Path) -> list[ReleaseFolder]:
+    """The folders of the release-independent Collections, which sit beside every Release."""
+    return [f for f in active_folders(kb_path) if f.release_independent]
+
+
+def release_folders(kb_path: Path, release: str | None = None) -> list[ReleaseFolder]:
+    """The folders of one Release, the newest by default."""
+    folders = [f for f in active_folders(kb_path) if not f.release_independent]
     releases = sorted({f.release for f in folders})
     if not releases:
         raise KnowledgeBaseError(f"The Knowledge Base at {kb_path} holds no Release")
@@ -250,8 +267,9 @@ def rules(folders: list[ReleaseFolder]) -> str:
   not transcribed, so look rather than guess. A manual's figures are only in its PDF."""
 
 
-def agents_md(folder: ReleaseFolder) -> str:
-    """The AGENTS.md at the root of a Release folder, which a session opened there reads first."""
+def agents_md(folder: ReleaseFolder, beside: Sequence[ReleaseFolder] = ()) -> str:
+    """The AGENTS.md at the root of a Release folder, which a session opened there reads first;
+    ``beside`` are the release-independent folders it points at."""
     release = folder.release
     return f"""\
 # CST Studio Suite {release} help, as files
@@ -282,11 +300,102 @@ relative to this folder. Write what you make, such as macros and notes, into `{l
 ## Guides
 
 {_guides(folder)}
+{_beside(release, beside, lambda f: f"../{f.collection}/", "##")}"""
+
+
+def _beside(
+    release: str, beside: Sequence[ReleaseFolder], where: Callable[[ReleaseFolder], str], heading: str
+) -> str:
+    """The section that points a Release's session at the release-independent folders, each shown
+    as ``where`` gives its path."""
+    if not beside:
+        return ""
+    first = where(beside[0])
+    return f"""
+{heading} Beside this Release
+
+Release-independent Collections sit beside the Release, gathered apart from any Release:
+
+{_independent_list(beside, where)}
+
+Grep their `.pdf.md` Text Companions as you grep `manuals/`. They are not Release {release}: a
+PDF written for another CST version may describe dialogs or methods that differ in it, so check
+it against the Release's pages and cite the version it was written for. If your tools cannot read
+the folder, add it to the session: `claude --add-dir "{first}"`, `codex --add-dir "{first}"`, or
+File > Add Folder to Workspace in Cursor.
 """
 
 
-def agents_section(folders: list[ReleaseFolder]) -> str:
-    """The AGENTS.md section for a project repository that consults one Release."""
+def _independent_list(folders: Sequence[ReleaseFolder], where: Callable[[ReleaseFolder], str]) -> str:
+    """One line per release-independent folder, with its path as ``where`` gives it."""
+    return "\n".join(
+        f"- `{where(f)}`: {_count(f.pages.total(), 'PDF')}, listed in its "
+        f"`{layout.DOCUMENTS_ENTRY_FILE}` with the CST version each was written for"
+        for f in folders
+    )
+
+
+def independent_agents_md(folder: ReleaseFolder) -> str:
+    """The AGENTS.md at the root of a release-independent folder of PDFs."""
+    return f"""\
+# {folder.collection}: release-independent CST PDFs, as files
+
+This folder holds {_count(folder.pages.total(), "PDF")} gathered apart from any CST Studio Suite
+Release. It is release-independent: it sits beside the Release folders (`cst-<release>/`), and a
+session working in one Release consults it too. Every PDF is copied as it is, with a `.pdf.md`
+Text Companion beside it that holds each page's text under a `## page-<n>` heading.
+`{layout.DOCUMENTS_ENTRY_FILE}` lists them, with the CST version each was written for where it is
+known; a companion states it in its frontmatter as `cst_version`. Use your own file tools: grep,
+glob, read.
+
+{_incompleteness([folder])}## Rules
+
+- **Grep finds pages; it never answers.** Before you answer, read the page you cite in its
+  companion, and open the PDF at that page when the layout, a table or a figure matters. A hit's
+  page is the nearest `## page-<n>` heading above its line; grep with line numbers to find both.
+- Cite the PDF, its page and the CST version it was written for.
+- Work in one Release. A PDF written for another CST version than the Release you work in may
+  describe dialogs or methods that differ there: check it against the Release's pages, and say so.
+"""
+
+
+def root_agents_md(folders: list[ReleaseFolder]) -> str:
+    """The AGENTS.md at the root of the Knowledge Base, which lists its Releases and the
+    release-independent Collections beside them."""
+    releases = sorted((f for f in folders if not f.release_independent), key=lambda f: f.release)
+    independent = [f for f in folders if f.release_independent]
+    listed = "\n".join(
+        f"- `{f.collection}/`: Release {f.release}, {_count(f.pages.total(), 'page')}" for f in releases
+    )
+    out = f"""\
+# CST Studio Suite help, as files
+
+This Knowledge Base holds the CST Studio Suite help of {_count(len(releases), "Release")}, each in
+its own folder, and the release-independent Collections beside them. Each folder has its own
+`AGENTS.md`: read the one of the folder you work in.
+
+Work in one Release, and stay in one Release: open the session in its folder, cite only its pages,
+and never combine methods from two Releases in one answer, since a method or argument of one
+Release may not exist in another. If it is not clear which Release the user's project uses, ask.
+
+## Releases
+
+{listed or "None."}
+"""
+    if independent:
+        out += "\n## Release-independent Collections\n\nA session in any Release may consult these too:\n\n"
+        out += _independent_list(independent, lambda f: f"{f.collection}/") + "\n"
+    return out + "\n`builds/` and `assemblies/` hold the build data, not pages; don't read them.\n"
+
+
+def _count(n: int, noun: str) -> str:
+    """``n`` with the noun, in the plural unless it is one: "1 PDF", "1,840 pages"."""
+    return f"{n:,} {noun}{'s' if n != 1 else ''}"
+
+
+def agents_section(folders: list[ReleaseFolder], beside: Sequence[ReleaseFolder] = ()) -> str:
+    """The AGENTS.md section for a project repository that consults one Release, and the
+    release-independent folders ``beside`` it."""
     release = folders[0].release
     paths = ", ".join(f"`{f.path}`" for f in folders)
     first = folders[0].path
@@ -315,7 +424,7 @@ Add the folder to the session before you need it:
 ### Recipes
 
 {recipes(folders)}
-"""
+{_beside(release, beside, lambda f: str(f.path), "###")}"""
 
 
 def _folder_table(folders: list[ReleaseFolder]) -> str:
