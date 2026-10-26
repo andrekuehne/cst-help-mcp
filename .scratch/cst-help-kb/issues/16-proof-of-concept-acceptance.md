@@ -86,3 +86,56 @@ Criterion 4. Recorded as open. They need CST, which this run did not have:
 **2026-10-25, criterion 2.** The user ruled REL-01 an inappropriate test for this ticket: it needs the Release Notes, one of the PDFs left to ticket 21, and is not a question about the slice. With it out, every question the slice covers reached an expected Document (26 of 26, median 3, maximum 5), which ticks criterion 2. REL-01 is scored again once ticket 21 builds the Release Notes. The ticket stays open on criterion 3, the manual checks in Claude Code and Cursor.
 
 **2026-10-25, manual checks, closed.** The user accepted all four manual checks in Claude Code and Cursor, from sessions opened in the folder: an identifier (API-01), a how-to (HOW-04), a figure (FIG-01) and NODOC-01. That ticks criterion 3. The verify-in-CST items of criterion 4 remain open as recorded above.
+
+**2026-10-26, full agent run (ticket 21).** All of `cst-2024` is built: build `20261026T112357209944Z-73ae`, 4,246 Documents (168 Aliases), 7,388 API Entries, 4,663 Assets, 0 failed, `validate` clean, `AGENTS.md` 10.6 KB. The setup is the same as above. Every question in the benchmark can now be run, 40 of them; NODOC-01 is scored by hand. Result: 38 of 40, median 3, maximum 11, FAIL on two misses.
+
+| Id | Half | First expected read / total calls | 2026-10-25 run |
+|---|---|---:|---:|
+| API-01 | tuning | 3 / 3 | 3 |
+| API-02 | tuning | 3 / 3 | 3 |
+| API-03 | tuning | 3 / 3 | 2 |
+| API-04 | held-out | 3 / 5 | |
+| API-05 | held-out | 3 / 10 | |
+| API-06 | held-out | 3 / 9 | 3 |
+| API-07 | tuning | 3 / 4 | 2 |
+| API-08 | held-out | 2 / 4 | 3 |
+| API-09 | held-out | 5 / 5 | 5 |
+| API-10 | tuning | 3 / 4 | 3 |
+| SOL-01 | held-out | 5 / 6 | 5 |
+| SOL-02 | tuning | 3 / 12 | 3 |
+| SOL-03 | held-out | 3 / 5 | 3 |
+| SOL-04 | tuning | 3 / 5 | 5 |
+| HOW-01 | tuning | 2 / 3 | 2 |
+| HOW-02 | held-out | 4 / 5 | 3 |
+| HOW-03 | held-out | 2 / 3 | 2 |
+| HOW-04 | tuning | 3 / 3 | 3 |
+| TERM-01 | held-out | 4 / 5 | 3 |
+| TERM-02 | tuning | 4 / 4 | 4 |
+| TERM-03 | tuning | 3 / 7 | |
+| THEO-01 | held-out | 4 / 4 | 3 |
+| THEO-02 | tuning | 4 / 4 | 4 |
+| LINK-01 | held-out | 3 / 5 | 3 |
+| LINK-02 | tuning | 3 / 6 | 2 |
+| FIG-01 | held-out | 5 / 8 | 3 |
+| FIG-02 | tuning | miss, 6 calls | 2 |
+| FIG-03 | held-out | 3 / 17 | |
+| PDF-01 | tuning | 5 / 7 | 3 |
+| PDF-02 | held-out | 4 / 5 | 5 |
+| EXP-01 | held-out | 3 / 4 | |
+| EXP-02 | tuning | 2 / 4 | |
+| REL-01 | tuning | 6 / 7 | miss |
+| LIB-01 | held-out | 2 / 9 | |
+| LIB-02 | held-out | miss, 14 calls | |
+| LIB-03 | tuning | 6 / 7 | |
+| LIB-04 | held-out | 11 / 18 | |
+| LIB-05 | tuning | 5 / 13 | |
+| LIB-06 | tuning | 2 / 2 | |
+| LIB-07 | held-out | 2 / 3 | |
+
+Per half: tuning 19 of 20, median 3; held-out 19 of 20, median 3. By category: exact API lookup 10 of 10 (median 3), solver-specific 4 of 4 (3), how-to and UI 4 of 4 (2.5), terminology mismatch 3 of 3 (4), theory and equations 2 of 2 (4), crosslink 2 of 2 (3), figure matters 2 of 3 (4), PDF manuals 2 of 2 (4.5), Example Projects 2 of 2 (2.5), release notes 1 of 1 (6), Library 6 of 7 (3.5).
+
+The misses:
+- FIG-02 took the manual route of the concept recipe (step 5). It answered from the High Frequency manual, pages 68–69, which has its own solver-choice diagrams. It never opened the expected help page, `special_overview_whichsolver.htm`. The manual was in the slice before, so this is the agent's choice of route, not a change from ticket 21.
+- LIB-02, which asks for the farfield-source Result Template, grepped `keywords.md`, `api.md`, `3d/` and `vba_3d/`. It never opened `library.md` or `library/`. A Library question first runs here with all Areas built. Nothing in ticket 21 touches the Library recipe.
+
+The run also flagged "call 1 was not the AGENTS.md read" on every question. Claude Code loads `CLAUDE.md`, which includes `AGENTS.md`, so the agents no longer read it with a tool call.
