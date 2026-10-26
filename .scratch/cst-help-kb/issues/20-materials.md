@@ -4,7 +4,7 @@
 
 **Blocked by:** 17
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Every `.mtd` file is copied unchanged, both file formats included.
 - [x] `materials.md` lists each file with its exact name and, where the name has a loss qualifier or a vendor prefix, the base name after it, so that a case-insensitive grep for `fr-?4` or `ro4350b` finds its lines.
