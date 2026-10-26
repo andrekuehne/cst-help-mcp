@@ -77,7 +77,9 @@ FOLDERS = {
         "Word manuals (Getting Started: installation, licensing, first steps; High Frequency "
         "Simulation: workflow and solver choice), each a PDF with a `.pdf.md` text companion"
     ),
-    TREE_FOLDER: "CST's Library: VBA Macros, Result Templates and Includes; Python apps",
+    TREE_FOLDER: (
+        "CST's Library: VBA Macros, Result Templates and Includes; Python apps; Material Definitions"
+    ),
     ".": "Python menu topics (CST Apps, user scripts), at the top of the folder and copied into `python/`",
 }
 
@@ -94,6 +96,10 @@ ENTRY_FILES = {
     layout.LIBRARY_ENTRY_FILE: (
         "every Library file on one line: kind, menu path and Display Name, Application Filter, "
         "Variants, first comment, Helpers, a Python app's modules"
+    ),
+    layout.MATERIALS_ENTRY_FILE: (
+        "every Material Definition on one line: exact name, base name without vendor or loss "
+        "qualifier, Variants, files with the same definition, description"
     ),
 }
 
@@ -175,12 +181,23 @@ documented CST API Entry. A dialog's `.bmp` is beside its Macro as a `.png`.
 **VBA sent from Python** through `add_to_history` or `execute_vba_code`: grep the string literals
 in `library/Python/` for the VBA (`With Solver`)."""
 
+MATERIALS_RECIPE = """\
+**A material** for `.Material "…"`: grep `materials.md` case-insensitively for its base name
+(`fr-?4`, `ro4350b`). The name CST expects is the file name without `.mtd`, exactly, with its
+spaces, parentheses and case: `.Material "Rogers RO4350B (lossy)"`. `(lossy)` and `(loss free)`
+Variants differ in their loss model. For its properties, read its file in `library/Materials/`.
+`(CHT)` materials are fluids for conjugate heat transfer, not high-frequency materials: their EM
+properties are unchecked."""
+
 
 def recipes(folders: list[ReleaseFolder]) -> str:
-    """The recipes, with the Library's when the folders hold one."""
+    """The recipes, with the Library's and the Materials' when the folders hold them."""
+    parts = [RECIPES]
     if any(TREE_FOLDER in f.pages for f in folders):
-        return f"{RECIPES}\n\n{LIBRARY_RECIPES}"
-    return RECIPES
+        parts.append(LIBRARY_RECIPES)
+    if any((f.path / layout.MATERIALS_ENTRY_FILE).is_file() for f in folders):
+        parts.append(MATERIALS_RECIPE)
+    return "\n\n".join(parts)
 
 
 def rules(folders: list[ReleaseFolder]) -> str:

@@ -150,3 +150,24 @@ def test_a_page_whose_link_target_is_gone_is_reported_through_the_link_too(
 
     assert code == 1
     assert f"cst-2024/{SOLVER_HF} links to {FD_SOLVER}, which is missing" in out
+
+
+def test_materials_md_links_resolve_and_a_missing_materials_md_is_reported(
+    corpus_2024: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    include = ["Library/Materials/Rogers RO3003*", "Library/Materials/Taconic NF-30*"]
+    build_collection(
+        write_config(tmp_path / "cst-help.toml", tmp_path / "kb", corpus_2024, include), "cst-2024"
+    )
+    view = tmp_path / "kb" / "cst-2024"
+    assert "](<library/Materials/Taconic NF-30 (loss free).mtd>)" in (view / "materials.md").read_text(
+        "utf-8"
+    )
+    assert not (view / "library.md").exists()  # no Library code in this build
+    assert _validate(tmp_path / "kb", capsys)[0] == 0
+    (view / "materials.md").unlink()
+
+    code, out = _validate(tmp_path / "kb", capsys)
+
+    assert code == 1
+    assert "cst-2024/materials.md is missing; run cst-help assemble to restore it" in out

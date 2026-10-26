@@ -113,7 +113,7 @@ The suffix of a Library file name that says in which CST applications (such as M
 _Avoid_: app suffix, caret suffix
 
 **Variant**:
-One of several Library items with the same Display Name in the same folder that differ only in their Application Filter.
+One of several Library items with the same Display Name in the same folder that differ only in their Application Filter. For Material Definitions, one of several whose names differ only in the loss qualifier, such as `FR-4 (lossy)` and `FR-4 (loss free)`.
 _Avoid_: duplicate, copy
 
 ### Derived from the documentation

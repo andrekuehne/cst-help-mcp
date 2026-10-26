@@ -1,5 +1,5 @@
-"""Reader for the Library: CST's Macros, Result Templates, Includes and Python apps, copied into the
-tree as files (ADR 0014).
+"""Reader for the Library: CST's Macros, Result Templates, Includes, Python apps and Material
+Definitions, copied into the tree as files (ADR 0014).
 
 Text files keep their names and folders under ``library/``, re-encoded from cp1252 to UTF-8 with
 LF line endings, so agents grep them like any code. Each gets one line in ``library.md``: its kind,
@@ -10,8 +10,15 @@ descrambled. Dialog bitmaps become PNG beside the Macros that load them.
 Of ``Python/``, only the Python apps are copied: each app's descriptor, its entry module, and the
 modules that drive CST: they import the ``cst`` package, call VBA objects or hold VBA in a string
 literal. The rest of the ``cstapps``
-framework and the wheels stay out; the modules left out are reported. Nothing else is copied:
-executables, Office files, projects and presets stay out. Nothing from the Library is executed.
+framework and the wheels stay out; the modules left out are reported.
+
+Of ``Materials/``, every Material Definition is copied with its content unchanged and LF line
+endings, and ``materials.md`` lists it apart from the code: its exact name, which is the file
+name, its base name, its Variants and the files with the same bytes. Nothing in a Material
+Definition is parsed but its description.
+
+Nothing else is copied: executables, Office files, projects and presets stay out. Nothing from the
+Library is executed.
 """
 
 from __future__ import annotations
@@ -28,7 +35,7 @@ from pathlib import Path, PurePosixPath
 from PIL import Image
 
 from cst_help_mcp.errors import BuildError
-from cst_help_mcp.layout import LibraryLine
+from cst_help_mcp.layout import MATERIAL_KIND, LibraryLine
 
 SOURCE_FOLDER = "Library"
 TREE_FOLDER = "library"
@@ -37,6 +44,15 @@ FOLDERS = ("Macros", "Result Templates", "Includes")
 # The Python apps' folder, which a release folder may lack, and the package root inside it.
 PYTHON_FOLDER = "Python"
 _PYTHON_ROOT = "lib"
+# The Material Definitions' folder, which a release folder may lack too.
+MATERIALS_FOLDER = "Materials"
+_MATERIAL_SUFFIX = ".mtd"
+# The vendors whose name starts a Material Definition's name: "Rogers RO4350B (lossy)".
+_VENDORS = ("Panasonic", "Rogers", "Taconic", "ECCOSORB", "Preperm", "Schott")
+# The last qualifier of a name, when it gives the loss model: "(lossy)", "(loss free)",
+# "(lossy - thermal anisotropic)". Other qualifiers, such as "(CHT)" or "(back)", name other materials.
+_LOSS_QUALIFIER = re.compile(r"\s*\(loss(?:y| free)\b[^()]*\)$", re.IGNORECASE)
+_SECTION = re.compile(r"^\[(\w+)\]$", re.MULTILINE)
 _KINDS = {
     ".mcr": "control macro",
     ".mcs": "structure macro",
@@ -123,6 +139,8 @@ def read_library(release: Path, selected: Callable[[str], bool]) -> Library:
                 library.unsupported[suffix] += 1
     if (release / SOURCE_FOLDER / PYTHON_FOLDER).is_dir():
         library.extend(_read_python(release, selected))
+    if (release / SOURCE_FOLDER / MATERIALS_FOLDER).is_dir():
+        library.extend(_read_materials(release, selected))
     library.files = _with_variants(library.files)
     _check_paths(library)
     return library
@@ -194,12 +212,15 @@ def _description(text: str) -> str:
 
 
 def _with_variants(files: list[LibraryFile]) -> list[LibraryFile]:
-    """Files of one folder with the same Display Name and extension are each other's Variants."""
+    """Files of one folder with the same Display Name and extension are each other's Variants.
+    Material Definitions keep theirs, which differ in the loss qualifier instead."""
     groups: defaultdict[tuple[str, str, str], list[str]] = defaultdict(list)
     for file in files:
         groups[_variant_key(file)].append(file.line.locator)
     return [
-        replace(
+        file
+        if file.line.kind == MATERIAL_KIND
+        else replace(
             file,
             line=replace(
                 file.line,
@@ -386,6 +407,86 @@ def _docstring(tree: ast.Module) -> str:
     for line in (ast.get_docstring(tree) or "").splitlines():
         if re.search(r"[A-Za-z]", line):
             return " ".join(line.split())[:_DESCRIPTION_LENGTH]
+    return ""
+
+
+def _read_materials(release: Path, selected: Callable[[str], bool]) -> Library:
+    """The Material Definitions, copied with LF line endings: the file name is the material's exact name.
+
+    Names that differ only in their loss qualifier are each other's Variants, and byte-identical
+    files have the same definition. Nothing in a file is parsed but its ``[Description]``.
+    """
+    library = Library()
+    sources: dict[str, bytes] = {}  # each file's bytes, by Locator
+    for path in sorted(p for p in (release / SOURCE_FOLDER / MATERIALS_FOLDER).rglob("*") if p.is_file()):
+        rel = path.relative_to(release).as_posix()
+        if not selected(rel):
+            continue
+        if path.suffix.lower() != _MATERIAL_SUFFIX:
+            library.unsupported[path.suffix.lower()] += 1
+            continue
+        data = path.read_bytes()
+        try:
+            text = data.decode("cp1252").replace("\r\n", "\n")
+        except UnicodeDecodeError as e:
+            library.failures.append((rel, f"{type(e).__name__}: {e}"))
+            continue
+        line = LibraryLine(
+            locator=library_locator(rel),
+            kind=MATERIAL_KIND,
+            display_name=path.stem,
+            application_filter="",
+            variants=[],
+            description=_material_description(text),
+            helpers=[],
+            base_name=_base_name(path.stem),
+        )
+        sources[line.locator] = data
+        library.files.append(LibraryFile(line, text))
+    variants: defaultdict[tuple[str, str], list[str]] = defaultdict(list)
+    same: defaultdict[bytes, list[str]] = defaultdict(list)
+    for file in library.files:
+        variants[_material_key(file.line.locator)].append(file.line.locator)
+        same[sources[file.line.locator]].append(file.line.locator)
+
+    def others(group: list[str], locator: str) -> list[str]:
+        return [PurePosixPath(o).name for o in group if o != locator]
+
+    library.files = [
+        replace(
+            file,
+            line=replace(
+                file.line,
+                variants=others(variants[_material_key(file.line.locator)], file.line.locator),
+                same_definition=others(same[sources[file.line.locator]], file.line.locator),
+            ),
+        )
+        for file in library.files
+    ]
+    return library
+
+
+def _base_name(name: str) -> str:
+    """A material's name without its vendor prefix and loss qualifier; "" when it has neither."""
+    base = _LOSS_QUALIFIER.sub("", name)
+    vendor, _, rest = base.partition(" ")
+    if vendor in _VENDORS and rest:
+        base = rest
+    return base if base != name else ""
+
+
+def _material_key(locator: str) -> tuple[str, str]:
+    """Material Definitions of one folder whose names differ only in the loss qualifier are Variants."""
+    path = PurePosixPath(locator)
+    return str(path.parent), _LOSS_QUALIFIER.sub("", path.stem).lower()
+
+
+def _material_description(text: str) -> str:
+    """The ``[Description]`` section on one line."""
+    parts = _SECTION.split(text)
+    for name, body in zip(parts[1::2], parts[2::2], strict=True):
+        if name == "Description":
+            return " ".join(body.split())[:_DESCRIPTION_LENGTH]
     return ""
 
 

@@ -465,6 +465,25 @@ Sources here are relative to the corpus root and start with `Library/`. Procedur
 - **Confidence:** high for the sources
 - **Risk:** The calls are made without an object, so the Usage scan has to map them to the Application object (ADR 0012).
 
+### LIB-06: the exact name of Rogers RO4350B
+- **Question:** My macro assigns Rogers RO4350B, with its losses, to the substrate. What exact name do I put in `.Material` so that CST finds it in its material library?
+- **Area:** `materials`
+- **Sources:**
+  1. `Library/Materials/Rogers RO4350B (lossy).mtd`
+- **Why:** The material's name exists only as the file name, and code uses it verbatim. "With its losses" picks `(lossy)` over `(loss free)`, which sets the loss tangent to 0.
+- **Confidence:** high
+- **Risk:** `Rogers RO4350B LoPro (lossy)` is a different laminate with a near name. An agent that answers `RO4350B` or `Rogers RO4350B` gives a name CST does not know.
+
+### LIB-07: which copper for a lossy metal
+- **Question:** I need copper as a lossy metal for the traces of my model. Which copper does CST's material library offer for that, and what is its conductivity?
+- **Area:** `materials`
+- **Sources:**
+  1. `Library/Materials/Copper (annealed).mtd` (Lossy metal, 5.8e7 S/m, 100% IACS)
+  2. `Library/Materials/Copper (pure).mtd` (Lossy metal, 5.96e7 S/m)
+- **Why:** Both files define a Lossy metal set for all frequencies and a Normal set for statics. Library code uses `Copper (annealed)` 11 times and `Copper (pure)` never.
+- **Confidence:** best judgement (which copper fits depends on the user's traces; either file answers)
+- **Risk:** `Copper (annealed)` gives the conductivity as `.Kappa`, which the 2024 help does not document, and `Copper (pure)` as both `.Sigma` and `.Kappa`. `[Attributes]` restates it as "Electric cond." per material set.
+
 ## 12. Not in the documentation
 
 Scored by hand during the agent check, not by the agent run.

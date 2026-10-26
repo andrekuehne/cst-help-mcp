@@ -26,8 +26,26 @@ def test_only_the_text_files_and_the_dialog_bitmaps_are_copied(library_build: Pr
 
     suffixes = {p.suffix.lower() for p in library.rglob("*") if p.is_file()}
 
-    assert suffixes == {".mcr", ".mcs", ".rtp", ".bas", ".cls", ".txt", ".lib", ".png", ".py", ".json"}
-    assert sorted(p.name for p in library.iterdir()) == ["Includes", "Macros", "Python", "Result Templates"]
+    assert suffixes == {
+        ".mcr",
+        ".mcs",
+        ".rtp",
+        ".bas",
+        ".cls",
+        ".txt",
+        ".lib",
+        ".png",
+        ".py",
+        ".json",
+        ".mtd",
+    }
+    assert sorted(p.name for p in library.iterdir()) == [
+        "Includes",
+        "Macros",
+        "Materials",
+        "Python",
+        "Result Templates",
+    ]
     assert library_build.report["unsupported"][".exe"] == 1
     assert library_build.report["unsupported"][".ppt"] == 7
 
@@ -98,7 +116,7 @@ def test_agents_md_names_the_library_and_its_recipes(library_build: ProseBuild) 
     agents = (library_build.tree / "AGENTS.md").read_text(encoding="utf-8")
 
     copied = library_build.report["counts"]["converted"]
-    assert f"| `library/` | {copied} | CST's Library" in agents
+    assert f"| `library/` | {copied:,} | CST's Library" in agents
     assert "- `library.md`: every Library file on one line" in agents
     recipe = " ".join(agents.partition("**Working code**")[2].partition("\n\n")[0].split())
     assert "grep `library/`" in recipe

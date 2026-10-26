@@ -53,6 +53,9 @@ API_ENTRY_FILE = "api.md"
 # The Library files a Build copied or listed, beside its tree, and the entry file that lists them.
 LIBRARY_FILE = "library.json"
 LIBRARY_ENTRY_FILE = "library.md"
+# The kind of a Library file that materials.md lists instead of library.md.
+MATERIAL_KIND = "Material Definition"
+MATERIALS_ENTRY_FILE = "materials.md"
 # The workspace files that assembly writes at the root of a readable view (ADR 0013).
 AGENTS_FILE = "AGENTS.md"
 CLAUDE_FILE = "CLAUDE.md"
@@ -270,6 +273,8 @@ class LibraryLine:
     helpers: list[str]  # an Include's public procedures
     modules: list[str] = field(default_factory=list)  # a Python app's modules, entry module first
     restricted_to: str = ""  # the product a Python app's descriptor restricts it to, such as "PCBS"
+    base_name: str = ""  # a Material Definition's name without vendor prefix or loss qualifier: "RO4350B"
+    same_definition: list[str] = field(default_factory=list)  # Material Definitions with the same bytes
 
 
 def write_library_lines(build: Path, lines: list[LibraryLine]) -> None:
@@ -280,6 +285,17 @@ def read_library_lines(build: Path) -> list[LibraryLine]:
     """The Library files a Build lists; none for a Build without a Library."""
     library_file = build / LIBRARY_FILE
     return [LibraryLine(**line) for line in read_json(library_file)] if library_file.is_file() else []
+
+
+def library_entry_files(lines: list[LibraryLine]) -> list[str]:
+    """The entry files that list a Build's Library files: library.md for its code, materials.md
+    for its Material Definitions."""
+    names = []
+    if any(line.kind != MATERIAL_KIND for line in lines):
+        names.append(LIBRARY_ENTRY_FILE)
+    if any(line.kind == MATERIAL_KIND for line in lines):
+        names.append(MATERIALS_ENTRY_FILE)
+    return names
 
 
 def assembly_builds(assembly: Path) -> dict[str, str]:

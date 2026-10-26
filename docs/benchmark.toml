@@ -521,6 +521,29 @@ sources = [
     { path = "Library/Result Templates/S-Parameters/- Touchstone Export^+MWS+DS.rtp", headings = ["Define"] },
 ]
 
+[[questions]]
+id = "LIB-06"
+half = "tuning"
+question = "My macro assigns Rogers RO4350B, with its losses, to the substrate. What exact name do I put in .Material so that CST finds it in its material library?"
+areas = ["materials"]
+short = ["RO4350B material name", "Rogers RO4350B lossy"]
+confidence = "high"
+sources = [
+    { path = "Library/Materials/Rogers RO4350B (lossy).mtd" },
+]
+
+[[questions]]
+id = "LIB-07"
+half = "held-out"
+question = "I need copper as a lossy metal for the traces of my model. Which copper does CST's material library offer for that, and what is its conductivity?"
+areas = ["materials"]
+short = ["copper lossy metal material", "copper annealed material"]
+confidence = "best judgement"
+sources = [
+    { path = "Library/Materials/Copper (annealed).mtd" },
+    { path = "Library/Materials/Copper (pure).mtd" },
+]
+
 # 12. Not in the documentation: scored by hand during the agent check.
 
 [[questions]]

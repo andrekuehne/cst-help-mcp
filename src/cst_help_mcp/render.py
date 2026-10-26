@@ -6,8 +6,9 @@ import html
 import json
 import re
 from dataclasses import dataclass, replace
+from pathlib import PurePosixPath
 
-from cst_help_mcp.layout import ApiLine, LibraryLine
+from cst_help_mcp.layout import MATERIAL_KIND, ApiLine, LibraryLine
 
 # The start of a line that Markdown reads as a block: a bullet, a heading or a quote, or the number
 # of an ordered list item, whose "." or ")" is what gets escaped.
@@ -145,7 +146,8 @@ def render_library(release: str, lines: list[LibraryLine]) -> str:
     """
     out = [*_frontmatter({"release": release, "title": "Library"}), "# Library", ""]
     by_folder: dict[str, list[LibraryLine]] = {}
-    for line in sorted(lines, key=lambda line: line.locator.lower()):
+    code = [line for line in lines if line.kind != MATERIAL_KIND]  # materials.md lists the rest
+    for line in sorted(code, key=lambda line: line.locator.lower()):
         # The Library folder below library/, such as Macros.
         by_folder.setdefault(line.locator.split("/")[1], []).append(line)
     for folder, folder_lines in by_folder.items():
@@ -170,6 +172,32 @@ def render_library(release: str, lines: list[LibraryLine]) -> str:
             out.append(_row(cells))
         out.append("")
     return "\n".join(out)
+
+
+def render_materials(release: str, lines: list[LibraryLine]) -> str:
+    """The entry file materials.md: one Material Definition per line, with its exact name, its base
+    name without vendor prefix or loss qualifier, its Variants, the files with the same definition
+    as links, and its description."""
+    out = [
+        *_frontmatter({"release": release, "title": "Materials"}),
+        "# Materials",
+        "",
+        _row(["Path", "Name", "Base name", "Variants", "Same definition as", "Description"]),
+        "|---|---|---|---|---|---|",
+    ]
+    materials = [line for line in lines if line.kind == MATERIAL_KIND]
+    for line in sorted(materials, key=lambda line: line.locator.lower()):
+        folder = line.locator.rpartition("/")[0]
+        cells = [
+            _code(line.locator),
+            line.display_name,
+            line.base_name,
+            ", ".join(_code(v) for v in line.variants),
+            ", ".join(_link(PurePosixPath(s).stem, f"{folder}/{s}") for s in line.same_definition),
+            line.description,
+        ]
+        out.append(_row(cells))
+    return "\n".join(out) + "\n"
 
 
 def _row(cells: list[str]) -> str:
