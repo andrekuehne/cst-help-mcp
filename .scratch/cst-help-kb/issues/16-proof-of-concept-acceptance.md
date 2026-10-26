@@ -139,3 +139,5 @@ The misses:
 - LIB-02, which asks for the farfield-source Result Template, grepped `keywords.md`, `api.md`, `3d/` and `vba_3d/`. It never opened `library.md` or `library/`. It answered from the help instead: the Field Monitor's "Export farfield source" option (`Monitor.ExportFarfieldSource`) for the automatic export, and `FarfieldPlot.ASCIIExportAsSource` for a manual one. That answer is sound, but it never names the Result Template. In ticket 17's run, LIB-02 hit at call 7. Nothing in ticket 21 touches the Library recipe, so this is the agent's choice of route.
 
 The run also flagged "call 1 was not the AGENTS.md read" on every question. Claude Code loads `CLAUDE.md`, which includes `AGENTS.md`, so the agents no longer read it with a tool call.
+
+**2026-10-26, LIB-02 ruled.** The user accepts the LIB-02 miss. A user who wants an export after every run is expected to know about post-processing templates and to ask for one, so the recipes need no cue that sends such questions to the Library. The answer the agent gave from the help, the Field Monitor's "Export farfield source" option, is sound.
