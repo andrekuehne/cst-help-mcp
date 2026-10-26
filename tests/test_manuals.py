@@ -45,11 +45,20 @@ def test_a_manuals_text_companion_has_a_section_per_page(manuals_build: ProseBui
     assert "\n## page-119\n" in _md(manuals_build, f"manuals/{HIGH_FREQUENCY}.md")
 
 
+def test_symbol_font_arrows_and_bullets_become_text(manuals_build: ProseBuild) -> None:
+    md = _md(manuals_build, f"manuals/{HIGH_FREQUENCY}.md")
+
+    # Word's symbol-font arrow in a Ribbon Path reads as the help writes it.
+    assert "Post-Processing: Tools > Result Templates" in md
+    assert "\n• Radar Cross Section (RCS) calculation" in md
+    assert not {chr(0xF0F0), chr(0xF06F), chr(0xF0A7), chr(0xF0B7)} & set(md)  # the private-use code points
+
+
 def test_the_helps_links_to_a_manual_lead_to_its_text_companion(manuals_build: ProseBuild) -> None:
     md = _md(manuals_build, "general/printed_documentation.htm.md")
 
     assert f"[CST Studio Suite - Getting Started](<manuals/{GETTING_STARTED}.md>)" in md
-    # The manuals not read yet stay outside links, rendered as their labels.
+    # The manuals this build leaves out stay outside links, rendered as their labels.
     assert "Low Frequency Simulation.pdf" not in md
     assert manuals_build.report["outside_links"][".pdf"] == 6
 

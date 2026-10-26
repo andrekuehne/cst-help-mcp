@@ -73,7 +73,7 @@ class _Project:
         return self.sphinx or bool(self.topics)
 
 
-# The help projects that the cst-release Source can read so far. The root project's own
+# The help projects that the cst-release Source reads. The root project's own
 # subtrees make up the General Area, except its VBA overview, which macro questions need in
 # VBA 3D, and its Python menu topics, which belong with the Python reference. A topic published
 # identically in several projects becomes a Document of the first one listed here, so the ribbon
@@ -98,13 +98,24 @@ _CST_RELEASE_PROJECTS = (
     _Project("python", "Online Help/mergedProjects/Python", _READ_PROSE),
     # The Python menu topics (CST Apps and user scripts) at the root of the help.
     _Project("python", "Online Help", _READ_PROSE, topics=("menu.htm", "user_scipts.htm"), copy_to="python"),
+    _Project("circuits", "Online Help/mergedProjects/DES", _READ_PROSE),
+    _Project("pcb", "Online Help/mergedProjects/PCB", _READ_PROSE),
+    _Project("filter-designer", "Online Help/mergedProjects/Filter_Designer_3D", _READ_PROSE),
+    _Project("chip-interface", "Online Help/mergedProjects/CHI", _READ_PROSE),
+    _Project("vba-schematic", "Online Help/mergedProjects/VBA_DES", _READ_VBA),
+    # The Example Projects are published beside the others, but no table of contents splices them in.
+    *(
+        _Project("example-projects", f"Online Help/mergedProjects/EXP_{name}", _READ_PROSE)
+        for name in ("CBL", "DES", "HF", "LF", "MP", "PCB", "PD")
+    ),
 )
 
 
-# The Word manuals in the release folder that the cst-release Source reads so far, into Area
-# manuals as their PDFs with text companions.
+# The PDFs in the release folder that the cst-release Source reads into Area manuals, with text
+# companions: the Word manuals and the release notes. The FEST3D, SPARK3D and IdEM PDFs are left
+# out with their online help.
 _MANUALS_FOLDER = "Documentation"
-_MANUALS = ("CST Studio Suite - High Frequency Simulation.pdf", "CST Studio Suite - Getting Started.pdf")
+_LEFT_OUT_MANUALS = ("*FEST3D*", "*SPARK3D*", "*IdEM*")
 
 _IMAGE_SUFFIXES = frozenset((".png", ".gif", ".jpg", ".jpeg", ".bmp", ".svg", ".ico"))
 
@@ -344,9 +355,9 @@ def _read_source(
             if project.copy_to:
                 doc.copied_to.append(project.copy_to)
             yield doc
-    for name in _MANUALS:
+    for name in _manuals(source.path):
         rel = f"{_MANUALS_FOLDER}/{name}"
-        if not (source.path / rel).is_file() or not _selected(rel, source):
+        if not _selected(rel, source):
             continue
         report.discovered += 1
         found = True
@@ -369,6 +380,13 @@ def _read_source(
             f"No topics found for collection '{collection.name}' in {source.path} "
             "with the configured include and exclude filters"
         )
+
+
+def _manuals(release: Path) -> list[str]:
+    """The file names of the release folder's PDFs that Area manuals holds."""
+    folder = release / _MANUALS_FOLDER
+    pdfs = sorted(p.name for p in folder.glob("*.pdf")) if folder.is_dir() else []
+    return [name for name in pdfs if not any(fnmatch.fnmatch(name, p) for p in _LEFT_OUT_MANUALS)]
 
 
 def _selected(rel: str, source: SourceConfig) -> bool:

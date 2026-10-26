@@ -134,4 +134,4 @@ def test_agents_md_says_where_the_python_reference_is_and_how_to_find_a_dotted_n
     assert "| `python/` | 9 | Python reference (`cst.interface`, `cst.results`" in agents
     assert "`python/source/`" in agents.split("## Page anatomy")[1]
     assert "cst.results.ResultModule.get_run_ids" in agents.split("## Recipes")[1]
-    assert "under `vba_3d/`, `sax_basic/` or `python/`" in agents
+    assert "under `vba_3d/`, `vba_des/`, `sax_basic/` or `python/`" in agents

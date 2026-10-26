@@ -57,7 +57,7 @@ def release_folders(kb_path: Path, release: str | None = None) -> list[ReleaseFo
 # What each top-level folder holds, for the table of folders.
 FOLDERS = {
     "3d": "3D simulation: solver dialogs, overviews, theory, post-processing, modelling",
-    "vba_3d": "VBA object reference: one page per object, one `###` heading per member",
+    "vba_3d": "VBA object reference of the 3D modeler: one page per object, one `###` heading per member",
     "vba": "Overview of the VBA macro language",
     "sax_basic": (
         "WinWrap Basic language reference: the macro language's keywords and built-in functions "
@@ -73,9 +73,27 @@ FOLDERS = {
         "Python reference (`cst.interface`, `cst.results`, `cst.eda`, `cst.asymptotic`, `cst.radar`, "
         "`cst.units`), one page per package, and its overview"
     ),
+    "des": "Circuits and systems (the schematic, Design Studio): blocks, tasks, SAM, circuit simulation",
+    "pcb": "PCBs and packages: layout import, checks, PCB solvers",
+    "filter_designer_3d": "Filter Designer 3D: filter synthesis and its example filters",
+    "chi": "Chip Interface: IC package import and simulation",
+    "vba_des": "VBA object reference of the schematic (Block, Net, tasks), like `vba_3d/`",
+    **{
+        f"exp_{name}": f"Example Projects: {what}, step by step"
+        for name, what in (
+            ("cbl", "cable harnesses"),
+            ("des", "circuits and systems"),
+            ("hf", "high frequency"),
+            ("lf", "low frequency"),
+            ("mp", "multiphysics"),
+            ("pcb", "PCBs and packages"),
+            ("pd", "particle dynamics"),
+        )
+    },
     "manuals": (
-        "Word manuals (Getting Started: installation, licensing, first steps; High Frequency "
-        "Simulation: workflow and solver choice), each a PDF with a `.pdf.md` text companion"
+        "Word manuals (Getting Started; a workflow and solver-choice manual per product: high and "
+        "low frequency, particles, thermal and mechanical, PCB, circuits and SAM, cables) and the "
+        "Release Notes (what is new), each a PDF with a `.pdf.md` text companion"
     ),
     TREE_FOLDER: (
         "CST's Library: VBA Macros, Result Templates and Includes; Python apps; Material Definitions"
@@ -108,8 +126,9 @@ ANATOMY = """\
   `toc_paths`. Links between pages are relative to the Release folder; `assets/` holds the images.
 - Dialog pages: the `## ` line right under the title is the Ribbon Path, where the dialog is
   reached in the CST ribbon. Dialog fields are bold lines with a `: ` definition under them.
-- VBA pages under `vba_3d/`: one page per object, `## General Methods` and similar groups, then
-  `### MethodName` with a ```vba signature block and the description.
+- VBA pages under `vba_3d/` (3D modeler) and `vba_des/` (schematic): one page per object,
+  `## General Methods` and similar groups, then `### MethodName` with a ```vba signature block
+  and the description.
   `special_vba<topic>/..._object.htm.md` is one VBA object (for example
   `special_vbasolver/special_vbasolver_solver_object.htm.md` is the `Solver` object), and
   `common_vbaapp/` holds the application-level objects.
@@ -130,7 +149,9 @@ RECIPES = """\
 `api.md` for it, which gives the signature and the page with its anchor; grep a bare member with
 its dot and a trailing space, `.FrequencyRange `, to see every object that has it. Or grep the
 member as a heading, case-insensitively, in `vba_3d/`: `^### FrequencyRange`. For an object,
-grep its title: `^title: "Solver Object`. Then read the page or the heading's section.
+grep its title: `^title: "Solver Object`. Then read the page or the heading's section. The
+schematic's objects (`Block`, `Net`) are in `vba_des/`; in `api.md` their Area is `vba-schematic`,
+which tells them from 3D objects of the same name.
 
 **A macro language keyword or built-in** (`Left$`, `Open`, `Print #`, file and string handling,
 `MsgBox`, dialogs): grep `api.md` for it, or the titles in `sax_basic/`. These are not CST objects;
@@ -158,11 +179,12 @@ settings, the overview (`special_overview_*`) for concepts.
 title words in `vba_3d/` titles; dialog and object usually share a name (Solver Parameters and
 `Solver Object`, Port and `Port Object`).
 
-**A manual** (installation, the workflow of a solver, choosing between solvers or ports): grep the
-text companions in `manuals/`, the `.pdf.md` files, which hold each page's text under a
-`## page-<n>` heading. A hit's page is the nearest such heading above its line; grep with line
-numbers to find both. Read that page's section, then open the PDF beside it at that page with
-your read tool when the layout, a table or a figure matters. Cite the PDF and its page.
+**A manual** (installation, the workflow of a solver, choosing between solvers or ports, what is
+new in the Release): grep the text companions in `manuals/`, the `.pdf.md` files, which hold
+each page's text under a `## page-<n>` heading. A hit's page is the nearest such heading above
+its line; grep with line numbers to find both. Read that page's section, then open the PDF beside
+it at that page with your read tool when the layout, a table or a figure matters. Cite the PDF
+and its page.
 
 **Theory and equations**: `special_overview_*` and `special_theory_*` pages in `3d/`. TeX is inline
 as `$…$` or `\\begin{equation}`; where an equation is an image, open it.
@@ -205,17 +227,17 @@ def rules(folders: list[ReleaseFolder]) -> str:
     release = folders[0].release
     if any(TREE_FOLDER in f.pages for f in folders):
         documented = f"""\
-- If an identifier is in no page under `vba_3d/`, `sax_basic/` or `python/` and nowhere in
-  `library/`, say that it is not documented in Release {release}. Never invent a method, its
-  arguments or its behaviour.
+- If an identifier is in no page under `vba_3d/`, `vba_des/`, `sax_basic/` or `python/` and
+  nowhere in `library/`, say that it is not documented in Release {release}. Never invent a
+  method, its arguments or its behaviour.
 - A member that code in `library/` uses but no page documents is an Undocumented Member: use it
   only knowingly, and say that it is one."""
     else:
         documented = f"""\
-- If an identifier is in no page under `vba_3d/`, `sax_basic/` or `python/`, say that it is
-  not documented in Release {release}. Never invent a method, its arguments or its behaviour.
-  This folder holds no Library, so there is no Undocumented Member (one that Library code uses
-  but no page documents) to find."""
+- If an identifier is in no page under `vba_3d/`, `vba_des/`, `sax_basic/` or `python/`, say
+  that it is not documented in Release {release}. Never invent a method, its arguments or its
+  behaviour. This folder holds no Library, so there is no Undocumented Member (one that Library
+  code uses but no page documents) to find."""
     return f"""\
 - **Grep finds pages; it never answers.** Before you answer, open every page you cite with your
   read tool, even when the grep lines already seem to hold the answer. A snippet leaves out the

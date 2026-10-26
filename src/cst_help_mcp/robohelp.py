@@ -84,6 +84,8 @@ PROSE = Profile(
     },
 )
 
+# Class roles that a heading tag overrides.
+_TEXT_ROLES = frozenset(("text", "term"))
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _OBJECT_SUFFIX = re.compile(r"\s+objects?$", re.IGNORECASE)
 _PARENTHETICAL = re.compile(r"\s*\(.*\)\s*$")
@@ -294,11 +296,16 @@ def _span(cell: Tag, attribute: str) -> int:
 
 
 def _role(element: Tag, profile: Profile) -> str | None:
+    tag_role = profile.tags.get(element.name)
     for cls in element.get_attribute_list("class"):
         role = profile.classes.get(str(cls).lower())
+        if role in _TEXT_ROLES and tag_role and tag_role.startswith("heading-"):
+            # CST styles some headings as body text or a field name (<h4 class="Tip-Note-Text">,
+            # a Ribbon Path as <h2 class="Tip-Note-Heading">); the heading tag says more.
+            return tag_role
         if role:
             return role
-    return profile.tags.get(element.name)
+    return tag_role
 
 
 def object_name_from_heading(heading: str) -> str | None:

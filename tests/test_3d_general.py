@@ -208,3 +208,12 @@ def test_fragments_that_match_no_anchor_are_listed(prose_build: ProseBuild) -> N
 
 def test_every_link_in_the_built_folder_leads_to_a_file_of_it(prose_build: ProseBuild) -> None:
     assert validate(prose_build.kb).problems == []
+
+
+def test_a_heading_styled_as_body_text_or_a_field_name_stays_a_heading(prose_build: ProseBuild) -> None:
+    # <h4 class="Tip-Note-Text"><a name="Mesh_Control_Items" ...></a>Mesh Control Items</h4>
+    mesh = _md(prose_build, "3d/common_overview/common_overview_mesh.htm.md")
+    assert re.search(r'^<a id="Mesh_Control_Items"></a>\n#+ Mesh Control Items$', mesh, re.MULTILINE)
+    # <h4 class="Tip-Note-Heading">Examples (Bend Shape)</h4>, not a field definition.
+    bend = _md(prose_build, "3d/common_struct/common_struct_bend_sheet.htm.md")
+    assert re.search(r"^#+ Examples \(Bend Shape\)$", bend, re.MULTILINE)

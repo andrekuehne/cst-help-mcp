@@ -17,6 +17,12 @@ SPHINX = "Online Help/Python"
 PYTHON_OVERVIEW = "Online Help/mergedProjects/Python"
 # The Library folders a cst-release Source expects in a release folder.
 LIBRARY_FOLDERS = ("Library/Macros", "Library/Result Templates", "Library/Includes")
+# The help projects of the Areas outside the proof-of-concept slice (ticket 21).
+REMAINING_PROJECTS = tuple(
+    f"Online Help/mergedProjects/{name}"
+    for name in ("DES", "PCB", "Filter_Designer_3D", "CHI", "VBA_DES")
+    + tuple(f"EXP_{exp}" for exp in ("CBL", "DES", "HF", "LF", "MP", "PCB", "PD"))
+)
 # The help projects a cst-release Source expects in a release folder.
 PROJECTS = (
     VBA_3D,
@@ -31,6 +37,7 @@ PROJECTS = (
     WINWRAP,
     SPHINX,
     PYTHON_OVERVIEW,
+    *REMAINING_PROJECTS,
 )
 
 

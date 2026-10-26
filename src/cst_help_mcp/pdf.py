@@ -16,13 +16,19 @@ from pypdf import PdfReader
 from cst_help_mcp.locator import page_anchor
 from cst_help_mcp.model import Block, Document, Section
 
+# Word writes its symbol-font characters to the Unicode private-use area, where pypdf leaves them.
+# The Ribbon Paths' arrow becomes ">", as the help writes it, and the bullets become "•"; other
+# symbols, mostly Greek letters in equations, stay as they are.
+_SYMBOL_FONT = str.maketrans({0xF0F0: ">", 0xF06F: "•", 0xF0A7: "•", 0xF0B7: "•"})
+
 
 def read_manual(pdf: Path, *, source_path: str, locator: str, area: str, release: str) -> Document:
     """A manual as a Document of its pages, each page's text lines a paragraph."""
     reader = PdfReader(pdf)
     sections = []
     for n, page in enumerate(reader.pages, start=1):
-        lines = (_escaped(" ".join(line.split())) for line in page.extract_text().splitlines())
+        text = page.extract_text().translate(_SYMBOL_FONT)
+        lines = (_escaped(" ".join(line.split())) for line in text.splitlines())
         blocks = [Block("paragraph", line) for line in lines if line]
         anchor = page_anchor(n)
         sections.append(Section([anchor], [anchor], [Block("heading", anchor, level=2), *blocks]))
